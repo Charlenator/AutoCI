@@ -58,7 +58,7 @@ A consulting engagement takes four weeks and costs tens of thousands of dollars.
 │  Phase-gated. Every step a Durable DBOS workflow│
 └─────────────────────────────────────────────────┘
 ```
-
+ 
 Every agent invocation is a node in a live React Flow graph. You watch the system reason in real time — every tool call, every retrieval, every LLM completion visible as it happens. A Six Sigma Project Manager can read every output artefact without translation. The AI speaks their language. 
 
 ---

@@ -59,4 +59,4 @@ frontend/.next/
 
 # Other standard ignores
 node_modules/
-.env*.local
+.env*.localCONTEXT/
