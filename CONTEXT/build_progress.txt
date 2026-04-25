@@ -1,0 +1,32 @@
+BUILD SEQUENCE — one node at a time
+
+SATURDAY (today) — full MVP synchronous
+
+1. Foundation: Supabase project + apply schema. Modal account + hello-world FastAPI. Vercel hello-world Next.js. All API keys in .env. Test: curl /health, Vercel deploy returns 200.
+2. Data layer: Seed DB1 with synthetic recruitment data (one role with deliberately bad TTF). Apply pgvector index. Test: select count(*) from pipeline_events.
+3. RAG ingest: A6 endpoint. Ingest 3 corpora into DB5 with chunking + embeddings. Test: select count(*) from corpus_chunks group by corpus_name.
+4. LiteLLM router (T3): Three model configs. Logs every call to DB3. Test: one Sonnet call + one DeepSeek call, both logged with cost.
+5. MCP analytics as Python module (T1): 6-7 formulas. Test: unit test each formula with synthetic data.
+6. Specialist agents (S1, S2, S3, S4): Each callable independently. Test: NL "What's our worst-performing stage?" → S1 → SQL → S3 calls T1 → result.
+7. DMAIC engine sync (K1-K7): Phase-gate enforcement via O3. Test: hardcode a problem brief, run K1→K7, output appears in DB2.output_state.
+8. Detection layer (D1, D2, D3): Test: hardcode fake "metric miss" event, run D1+D2, D3 outputs Problem Brief.
+9. Meta-Orchestrator (O2): Wires Detection output → DMAIC launch. Test: one full sync run from /trigger/manual.
+10. API gateway (A1, A2, A3 SSE, A4, A5): Test: curl /trigger/manual, EventSource on /sessions/:id/stream receives node events.
+11. Frontend skeleton (F1-F8) with placeholder data. Test: trigger Kaizen, watch graph light up node by node.
+12. Validation Interceptor (T2) as Python decorator. Test: inject bad output → flagged in DB2 annotation.
+
+🎯 HARD GATE: end of Sat = full Kaizen runs end-to-end synchronously, output in right panel, graph animates, cost ticker shows real $.
+
+SUNDAY — production-readiness layer
+
+13. DBOS wrap: Lift O1 into DBOS workflow. Each DMAIC phase = Durable Step. State persisted to Supabase via DBOS schema. Test: kill Modal container mid-Kaizen → restart → workflow resumes from last completed phase.
+14. MCP server: Wrap T1 Python module in MCP server protocol. Update S3 to call MCP via stdio. Test: S3 still works end-to-end, but now via MCP.
+
+MONDAY (SA Freedom Day — bonus build day)
+
+15. Real Adzuna (E1) ingestion job. Replace synthetic adzuna_postings with live data. ON CONFLICT (adzuna_id) for dedup.
+16. Google OAuth + Calendar/Gmail (E4 + E5). OAuth flow on frontend, token storage, scoped read permissions. S4 calendar/email tools wired.
+17. Real Tavily/NewsAPI (E2 + E3) in K6 Improve phase.
+18. Polish: cost ticker animation, React Flow node animations, deck draft, dry-run #1.
+
+TUESDAY AM — Submission. Final polish, dry-runs #2 + #3, README + license rider, submit.
