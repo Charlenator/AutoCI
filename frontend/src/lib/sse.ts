@@ -1,10 +1,29 @@
 /** SSE client — single EventSource per session with typed dispatch. */
+
+export interface EvidenceCitation {
+  source: string;
+  id: string;
+  snippet: string;
+}
+
+export interface PhaseWriteup {
+  phase: string;
+  headline: string;
+  tl_dr: string;
+  key_findings: string[];
+  hypothesis: string;
+  evidence_citations: EvidenceCitation[];
+  next_step: string;
+  open_questions: string[];
+}
+
 export type SSEEvent =
   | { type: "node_status"; agent_id: string; status: string; label?: string; data?: any }
   | { type: "phase_transition"; phase: string; status: string; data?: any }
   | { type: "output_delta"; phase: string; agent_id?: string; content: string }
   | { type: "step_progress"; agent_id: string; step: string; progress: number; total: number }
-  | { type: "cost"; total_usd: number; session_id?: string }
+  | { type: "cost"; total_usd: number; session_id?: string; input_tokens?: number; output_tokens?: number; cached_tokens?: number }
+  | { type: "phase_writeup"; phase: string; writeup: PhaseWriteup }
   | { type: "connected"; session_id: string }
   | { type: "validation"; data: any }
   | { type: "error"; data: any };

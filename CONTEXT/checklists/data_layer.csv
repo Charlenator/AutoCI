@@ -1,3 +1,0 @@
-Seed DB1 with synthetic recruitment data (one role with deliberately bad TTF)
-Apply pgvector index
-Test: select count(*) from pipeline_events

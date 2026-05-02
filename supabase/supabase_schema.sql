@@ -11,6 +11,8 @@ CREATE TABLE roles (
     title TEXT NOT NULL,
     department TEXT NOT NULL,
     target_ttf_days INT NOT NULL CHECK (target_ttf_days > 0),
+    target_conversion_rate FLOAT DEFAULT 0.15,
+    target_offer_acceptance_rate FLOAT DEFAULT 0.85,
     opened_date DATE NOT NULL,
     status TEXT NOT NULL CHECK (status IN ('open', 'filled', 'closed', 'on_hold')),
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -116,6 +118,9 @@ CREATE TABLE industry_benchmarks (
     median_ttf_days FLOAT NOT NULL,
     p25_ttf_days FLOAT,
     p75_ttf_days FLOAT,
+    conversion_rate_median FLOAT,    -- Applied → Hire conversion (industry median)
+    offer_acceptance_median FLOAT,   -- Offer acceptance rate (industry median)
+    source_yield_median FLOAT,       -- Median source channel yield
     sample_size INT,
     data_source TEXT DEFAULT 'synthetic',
     created_at TIMESTAMPTZ DEFAULT NOW()
@@ -137,6 +142,7 @@ CREATE TABLE adzuna_postings (
     expired_date DATE,
     is_repost BOOLEAN DEFAULT FALSE,
     original_posting_id UUID REFERENCES adzuna_postings(posting_id) ON DELETE SET NULL,
+    redirect_url TEXT, -- live posting URL (Phase 4.5 §I — for citation drawer link-out)
     embedding VECTOR(1536),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -192,6 +198,9 @@ CREATE TABLE agent_invocations (
     output_summary TEXT,             -- truncated result
     cost_usd NUMERIC(10,6) DEFAULT 0,
     duration_ms INT DEFAULT 0,
+    input_tokens INT DEFAULT 0,
+    output_tokens INT DEFAULT 0,
+    cached_tokens INT DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

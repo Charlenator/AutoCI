@@ -1,3 +1,0 @@
-DMAIC engine sync (K1-K7)
-Phase-gate enforcement via O3
-Test: hardcode a problem brief, run K1→K7, output appears in DB2.output_state

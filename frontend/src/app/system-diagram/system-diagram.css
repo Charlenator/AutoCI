@@ -301,11 +301,12 @@
   top: 1rem;
   right: 1rem;
   background: white;
-  padding: 1rem 1.25rem;
+  padding: 0.85rem 1rem;
   border-radius: 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   z-index: 10;
-  min-width: 180px;
+  min-width: 200px;
+  max-width: 220px;
   border: 1px solid #e2e8f0;
 }
 
@@ -425,6 +426,120 @@
   margin-top: 0.2rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
+}
+
+/* ── Service Node (per-agent / per-API map, used by /system-diagram v2) ── */
+.service-node {
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 10px 12px 12px;
+  width: 200px;
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 4px 8px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.service-node:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 4px 6px rgba(0, 0, 0, 0.06),
+    0 12px 20px rgba(0, 0, 0, 0.08);
+}
+
+.service-node.planned {
+  opacity: 0.7;
+  border-style: dashed;
+}
+
+.service-node.planned::after {
+  content: 'planned';
+  position: absolute;
+  top: -8px;
+  right: -4px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: #6b7280;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.service-id {
+  display: inline-block;
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  margin-bottom: 6px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.service-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1e293b;
+  line-height: 1.25;
+  margin-bottom: 4px;
+}
+
+.service-desc {
+  font-size: 10.5px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+/* React Flow handle dots — keep them visible but small */
+.react-flow__handle {
+  border: 2px solid white;
+}
+
+/* Legend additions */
+.legend-divider {
+  height: 1px;
+  background: #e2e8f0;
+  margin: 0.6rem 0;
+}
+
+.legend-edge-key {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.7rem;
+  color: #475569;
+}
+
+.legend-edge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.legend-edge .line {
+  width: 28px;
+  height: 2px;
+  display: inline-block;
+  background: #475569;
+  flex-shrink: 0;
+}
+
+.legend-edge .line.dashed {
+  background: repeating-linear-gradient(
+    90deg,
+    #475569 0 5px,
+    transparent 5px 9px
+  );
+}
+
+.legend-edge .line.animated {
+  background: linear-gradient(90deg, #2563eb 0%, #7c3aed 50%, #dc2626 100%);
 }
 
 /* Edge animations */

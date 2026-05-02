@@ -15,22 +15,38 @@ class D3GapAnalysisAgent:
     def __init__(self, llm_router: LiteLLMRouter):
         self.llm = llm_router
 
-    def analyze(self, internal: dict, external: list[dict],
-                session_id: str = None, market_context: str = "") -> GapReport:
-        """Compare internal vs external and flag gaps, enriched with live market intel."""
+    def analyze(self, internal: dict, external, session_id: str = None,
+                market_context: str = "") -> GapReport:
+        """Compare internal vs external and flag gaps, enriched with live market intel.
+        `external` accepts either the legacy TTF list (list[dict]) or the multi-KPI dict
+        with `comparisons[]` produced by D2.run_multi_kpi()."""
         flagged = []
 
-        for ext in external:
-            if abs(ext["delta_pct"]) > 20:
-                flagged.append({
-                    "metric": "time_to_fill",
-                    "our_value": ext["our_ttf"],
-                    "benchmark_value": ext["benchmark_median"],
-                    "delta_pct": ext["delta_pct"],
-                    "severity": "red" if abs(ext["delta_pct"]) > 50 else "amber",
-                })
+        # Multi-KPI path
+        if isinstance(external, dict) and external.get("comparisons"):
+            for c in external["comparisons"]:
+                if c["severity"] in ("amber", "red"):
+                    flagged.append({
+                        "metric": c["kpi"],
+                        "label": c.get("label", c["kpi"]),
+                        "our_value": c["our_value"],
+                        "benchmark_value": c["benchmark"],
+                        "delta_pct": c["delta_pct"],
+                        "severity": c["severity"],
+                    })
+        else:
+            # Legacy TTF-only path
+            for ext in (external or []):
+                if abs(ext.get("delta_pct", 0)) > 20:
+                    flagged.append({
+                        "metric": "time_to_fill",
+                        "our_value": ext["our_ttf"],
+                        "benchmark_value": ext["benchmark_median"],
+                        "delta_pct": ext["delta_pct"],
+                        "severity": "red" if abs(ext["delta_pct"]) > 50 else "amber",
+                    })
 
-        # Also check stage dropoff patterns
+        # Stage-dropoff secondary signal — keep as a coarse warning regardless of path
         if internal.get("stage_conversions"):
             for stage, rate in internal["stage_conversions"].items():
                 if rate < 0.5:

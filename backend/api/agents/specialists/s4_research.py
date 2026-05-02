@@ -134,6 +134,7 @@ class ResearchAgent:
                     "salary_currency": r.get("salary_is_predicted") and "predicted" or "actual",
                     "posted_date": r.get("created"),
                     "description": r.get("description", "")[:500],
+                    "redirect_url": r.get("redirect_url"),
                 } for r in data.get("results", [])]
         except Exception as e:
             return [{"error": f"Adzuna failed: {e}"}]
@@ -177,6 +178,7 @@ class ResearchAgent:
                     "salary_min": r.get("salary_min"),
                     "salary_max": r.get("salary_max"),
                     "posted_date": (r.get("posted_date") or "2025-01-01")[:10],
+                    "redirect_url": r.get("redirect_url"),
                     "embedding": emb,
                 }).execute()
             except Exception as e:

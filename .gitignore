@@ -60,3 +60,18 @@ frontend/.next/
 # Other standard ignores
 node_modules/
 .env*.local
+
+# Python build artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Python virtualenvs (Donna's box uses C:/autoci-venv; someone else might
+# bind a venv inside the repo).
+.venv/
+venv/
+backend/.venv/
+
+# Claude Code local project state (settings, agent caches).
+.claude/

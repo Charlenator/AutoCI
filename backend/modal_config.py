@@ -8,7 +8,6 @@ app = App("autoci-backend", image=image)
 
 secrets = [
     Secret.from_name("autoci-supabase"),
-    Secret.from_name("autoci-anthropic"),
     Secret.from_name("autoci-deepseek"),
     Secret.from_name("autoci-adzuna"),
     Secret.from_name("autoci-tavily"),

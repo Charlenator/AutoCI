@@ -181,6 +181,24 @@ async def seed_rag_corpus(supabase, embed_service: EmbeddingService | None = Non
         corpus_name = doc["corpus_name"]
         chunks = doc["chunks"]
 
+        # Skip the whole corpus if it's already populated. The docstring above has
+        # always claimed this behavior, but the previous implementation re-inserted
+        # on every call — leaving e.g. `dmaic_methodology` with 65 chunks for what
+        # should have been 5. Now actually doing what we said.
+        try:
+            existing = supabase.table("corpus_chunks").select(
+                "chunk_id", count="exact"
+            ).eq("corpus_name", corpus_name).limit(1).execute()
+            existing_count = existing.count if hasattr(existing, "count") else len(existing.data or [])
+        except Exception as e:
+            print(f"[seed] Existence check failed for '{corpus_name}': {e}")
+            existing_count = 0
+
+        if existing_count and existing_count > 0:
+            totals[corpus_name] = 0
+            print(f"[seed] Skipping '{corpus_name}' — {existing_count} chunks already present")
+            continue
+
         # Batch embed all chunk texts
         texts = [c["text"] for c in chunks]
         embeddings = embed_service.embed_batch(texts)

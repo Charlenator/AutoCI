@@ -104,8 +104,8 @@ def level2_supabase():
 
 def level3_litellm():
     print(f"\n{'='*60}\n📦 LEVEL 3: LiteLLM Router\n{'='*60}")
-    if not os.environ.get("ANTHROPIC_API_KEY", "").startswith("sk-ant-"):
-        print(f"  {ANSI['YELLOW']}⚠ SKIP: ANTHROPIC_API_KEY not set{ANSI['RESET']}")
+    if not os.environ.get("DEEPSEEK_API_KEY", ""):
+        print(f"  {ANSI['YELLOW']}⚠ SKIP: DEEPSEEK_API_KEY not set{ANSI['RESET']}")
         return
     from api.tools.t3_litellm_router import LiteLLMRouter
     r = LiteLLMRouter()
@@ -135,8 +135,8 @@ def level4_fastapi():
 
 def level5_e2e_kaizen():
     print(f"\n{'='*60}\n📦 LEVEL 5: Full E2E Kaizen Lifecycle\n{'='*60}")
-    if not os.environ.get("SUPABASE_SERVICE_KEY", "") or not (os.environ.get("ANTHROPIC_API_KEY", "").startswith("sk-ant-") or os.environ.get("DEEPSEEK_API_KEY", "")):
-        print(f"  {ANSI['YELLOW']}⚠ SKIP: Needs SUPABASE_SERVICE_KEY + at least one LLM key{ANSI['RESET']}")
+    if not os.environ.get("SUPABASE_SERVICE_KEY", "") or not os.environ.get("DEEPSEEK_API_KEY", ""):
+        print(f"  {ANSI['YELLOW']}⚠ SKIP: Needs SUPABASE_SERVICE_KEY + DEEPSEEK_API_KEY{ANSI['RESET']}")
         return
     from supabase import create_client
     from api.tools.t3_litellm_router import LiteLLMRouter

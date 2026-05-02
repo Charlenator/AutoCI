@@ -66,6 +66,15 @@ class AnalyticsLibrary:
         return accepted / total if total > 0 else 0.0
 
     @staticmethod
+    def applied_to_hire_rate(pipeline_events: list[dict], hires: list[dict]) -> float:
+        """End-to-end conversion: accepted hires / unique applicants."""
+        applicants = {e["candidate_id"] for e in pipeline_events if e["stage"] == "Applied"}
+        if not applicants:
+            return 0.0
+        accepted_hires = sum(1 for h in hires if h.get("accepted"))
+        return accepted_hires / len(applicants)
+
+    @staticmethod
     def source_yield(pipeline_events: list[dict], candidates: list[dict]) -> dict:
         """Hires per source channel."""
         source_map = {c["candidate_id"]: c["source_channel"] for c in candidates}

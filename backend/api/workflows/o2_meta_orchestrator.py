@@ -14,8 +14,24 @@ from api.agents.kaizen.k2_measure import K2MeasureAgent
 from api.agents.kaizen.k3_analyse_host import K3AnalyseHostAgent
 from api.agents.kaizen.k6_improve import K6ImproveAgent
 from api.agents.kaizen.k7_control import K7ControlAgent
+from api.agents.kaizen.k_writeup import WriteupAgent
+from api.agents.specialists.s1_translation import TranslationAgent
+from api.agents.specialists.s2_rag import RAGAgent
+from api.agents.specialists.s3_sql import SQLAgent
 from api.agents.specialists.s4_research import ResearchAgent
-from api.sse import push_event, make_node_event, make_phase_event, make_output_event, make_step_event
+from api.sse import (
+    push_event, make_node_event, make_phase_event, make_output_event,
+    make_step_event, make_cost_event, make_phase_writeup_event,
+    wait_for_hitl_response, clear_hitl_queue,
+)
+
+
+# 2026-05-02: temporarily disabled the 30s auto-advance — Donna's call to make
+# every gate manual while the writeup UX is still being iterated on. The "ask"
+# path was racing the timer (user submits a question, timer expires before the
+# answer streams back, auto-advances). Keeping the queue.Queue.get timeout in
+# place but cranking it high; effectively manual-only until we re-enable.
+HITL_TIMEOUT_SECONDS = 86400.0  # 24h — long enough that no realistic session hits it
 
 @dataclass
 class KaizenSessionResult:
@@ -41,10 +57,16 @@ class MetaOrchestrator:
         self.d3 = D3GapAnalysisAgent(llm_router)
         self.k1 = K1DefineAgent(llm_router)
         self.k2 = K2MeasureAgent(llm_router)
-        self.k3 = K3AnalyseHostAgent(llm_router)
-        self.k6 = K6ImproveAgent(llm_router)
-        self.k7 = K7ControlAgent(llm_router)
         self.research = ResearchAgent(supabase_client)
+        self.writeup = WriteupAgent(llm_router)
+        self.s1 = TranslationAgent()
+        self.s2 = RAGAgent(supabase_client)
+        self.s3 = SQLAgent(supabase_client, llm_router)
+        # K3 owns K4/K5 — give them the same RAG client so K4 can pull case
+        # studies once per run and K5 can pull per-branch (Phase 4.5 T2.1).
+        self.k3 = K3AnalyseHostAgent(llm_router, rag_agent=self.s2)
+        self.k6 = K6ImproveAgent(llm_router, rag_agent=self.s2)
+        self.k7 = K7ControlAgent(llm_router)
 
     def _sse(self, session_id: str, event: dict):
         try:
@@ -56,7 +78,153 @@ class MetaOrchestrator:
         """Shorthand for pushing an output_delta event."""
         self._sse(session_id, make_output_event(phase, content, agent_id))
 
-    def fetch_pipeline_data(self) -> dict:
+    def _emit_cost_snapshot(self, session_id: str) -> None:
+        """Push a `cost` SSE event with running totals so the dashboard ticker
+        updates incrementally (was previously only emitted at end of Kaizen)."""
+        try:
+            resp = self.supabase.table("agent_invocations").select(
+                "cost_usd, input_tokens, output_tokens, cached_tokens"
+            ).eq("session_id", session_id).execute()
+            rows = resp.data or []
+            self._sse(session_id, make_cost_event(
+                total_usd=sum(r.get("cost_usd", 0) or 0 for r in rows),
+                session_id=session_id,
+                input_tokens=sum(r.get("input_tokens", 0) or 0 for r in rows),
+                output_tokens=sum(r.get("output_tokens", 0) or 0 for r in rows),
+                cached_tokens=sum(r.get("cached_tokens", 0) or 0 for r in rows),
+            ))
+        except Exception:
+            pass  # cost-ticker miss isn't worth aborting a Kaizen for
+
+    def _emit_writeup(
+        self,
+        session_id: str,
+        phase: str,
+        phase_output,
+        prior_writeups: list,
+        role_title: str,
+        problem_brief: str | None,
+        data: dict,
+        market_data: dict | None = None,
+    ) -> dict | None:
+        """Run the writeup agent for a completed phase, emit the phase_writeup SSE event,
+        and append to prior_writeups. Returns the writeup dict, or None if it failed.
+
+        `market_data` is the S4 fetch snapshot taken in detection (Adzuna / Tavily / News).
+        It's the same payload across all phases of a Kaizen so the writeup agent can cite
+        live external data alongside kaizen_node outputs.
+
+        A failed writeup must NOT abort the Kaizen — we surface the error and let
+        the HITL gate auto-advance.
+        """
+        try:
+            writeup = self.writeup.run(
+                phase=phase,
+                phase_output=phase_output,
+                prior_writeups=prior_writeups,
+                role_title=role_title,
+                problem_brief=problem_brief,
+                session_id=session_id,
+                market_data=market_data,
+            )
+            wu_dict = writeup.to_dict()
+            prior_writeups.append(wu_dict)
+            self._sse(session_id, make_phase_writeup_event(phase, wu_dict))
+            # Push a running cost snapshot so the dashboard ticker reflects
+            # the price of the work just completed, not a $0 placeholder until
+            # the very end of the Kaizen.
+            self._emit_cost_snapshot(session_id)
+            return wu_dict
+        except Exception as e:
+            self._out(session_id, phase, "K_WRITEUP",
+                      f"⚠️ Writeup generation failed: {e}. Auto-advancing.")
+            return None
+
+    def _await_hitl(
+        self,
+        session_id: str,
+        phase: str,
+        role_title: str,
+        problem_brief: str | None,
+        data: dict,
+    ) -> bool:
+        """Block at a HITL gate. Returns True if the Kaizen should continue,
+        False if the user aborted. A 30s timeout auto-advances.
+
+        Loops to handle 'ask' decisions: each `ask` runs the chat agent inline
+        and re-blocks for the next decision.
+        """
+        while True:
+            response = wait_for_hitl_response(session_id, timeout_seconds=HITL_TIMEOUT_SECONDS)
+            if response is None:
+                self._out(session_id, phase, "O2", "⏱ Auto-advancing (no input within 30s).")
+                return True
+            decision = response.get("decision")
+            if decision == "advance":
+                return True
+            if decision == "abort":
+                self._out(session_id, phase, "O2", "🛑 User aborted the Kaizen.")
+                return False
+            if decision == "ask":
+                message = response.get("message", "").strip()
+                if message:
+                    self._handle_ask(session_id, phase, message, role_title, data)
+                continue
+            self._out(session_id, phase, "O2",
+                      f"⚠️ Unknown HITL decision '{decision}', auto-advancing.")
+            return True
+
+    def _handle_ask(
+        self,
+        session_id: str,
+        phase: str,
+        message: str,
+        role_title: str,
+        data: dict,
+    ) -> None:
+        """Route a user follow-up through S1 → S2/S3 and stream the answer back
+        as output_delta events tagged with the current phase."""
+        try:
+            classification = self.s1.classify(message)
+            self._out(session_id, phase, "S1",
+                      f"💬 **You asked**: {message}")
+            if classification.agent_routed_to == "s3_sql":
+                result = self.s3.execute(
+                    message,
+                    session_id=session_id,
+                    pipeline_events=data.get("pipeline_events", []),
+                    hires=data.get("hires", []),
+                    candidates=data.get("candidates", []),
+                    offer_outcomes=data.get("offer_outcomes", []),
+                )
+                if getattr(result, "computed_metrics", None):
+                    metrics_str = ", ".join(f"{k}: {v}" for k, v in result.computed_metrics.items())
+                    self._out(session_id, phase, "S3", f"📊 **Answer**: {metrics_str}")
+                elif getattr(result, "data", None):
+                    self._out(session_id, phase, "S3",
+                              f"📊 **Answer**: {len(result.data)} rows returned by SQL.")
+                else:
+                    self._out(session_id, phase, "S3",
+                              "📊 No matching metric — try rephrasing.")
+            else:
+                rag = self.s2.retrieve(message, top_k=5)
+                if getattr(rag, "chunks", None):
+                    self._out(session_id, phase, "S2",
+                              f"📚 **Answer**: {rag.context_window[:1500]}")
+                else:
+                    self._out(session_id, phase, "S2",
+                              "📚 Nothing matched in the knowledge base.")
+        except Exception as e:
+            self._out(session_id, phase, "O2", f"⚠️ Ask handler error: {e}")
+
+    def fetch_pipeline_data(self, role_title: str | None = None) -> dict:
+        """Pull pipeline data, optionally scoped to a single role.
+
+        When `role_title` matches a row in `roles`, candidates / pipeline_events /
+        hires / offer_outcomes are filtered to that role's records only. The full
+        `roles` and `industry_benchmarks` tables are always returned (they're small
+        and used cross-role for comparison).
+        """
         try:
             roles = self.supabase.table("roles").select("*").execute().data or []
             candidates = self.supabase.table("candidates").select("*").execute().data or []
@@ -67,16 +235,48 @@ class MetaOrchestrator:
         except Exception as e:
             print(f"Data fetch error: {e}")
             return {}
+
+        if role_title:
+            target = next((r for r in roles if r.get("title") == role_title), None)
+            if target:
+                role_id = target["role_id"]
+                candidates = [c for c in candidates if c.get("role_id") == role_id]
+                cand_ids = {c["candidate_id"] for c in candidates}
+                pipeline_events = [e for e in pipeline_events if e.get("candidate_id") in cand_ids]
+                hires = [h for h in hires if h.get("role_id") == role_id]
+                offer_outcomes = [o for o in offer_outcomes if o.get("role_id") == role_id]
+
         return {
             "roles": roles, "candidates": candidates,
             "pipeline_events": pipeline_events, "hires": hires,
             "offer_outcomes": offer_outcomes, "benchmarks": benchmarks,
         }
 
-    def run_full_kaizen(self, session_id: str, role_title: str = "Senior Java Developer") -> KaizenSessionResult:
-        data = self.fetch_pipeline_data()
+    def run_full_kaizen(
+        self,
+        session_id: str,
+        role_title: str = "Senior Java Developer",
+        problem_brief: str | None = None,
+        target_kpi: str | None = None,
+    ) -> KaizenSessionResult:
+        """Run a full DMAIC Kaizen.
+
+        Args:
+            session_id: UUID linking SSE events to this run.
+            role_title: Role family to benchmark (drives D2 lookup + S4 search query).
+            problem_brief: Optional user-supplied investigation prompt. When provided,
+                K1 frames SIPOC + problem statement around this brief — not the auto-detected gap.
+            target_kpi: Optional KPI key (`time_to_fill`, `conversion_rate`, `offer_acceptance`).
+                When provided, the Kaizen treats this KPI as the trigger regardless of D3's
+                normal threshold logic. Used by per-KPI "Investigate" buttons.
+        """
+        data = self.fetch_pipeline_data(role_title=role_title)
         if not data:
             return KaizenSessionResult(session_id=session_id, phase="error")
+
+        # Accumulated phase writeups — fed to the writeup agent on each new phase
+        # so it can reference prior findings without re-deriving them.
+        prior_writeups: list[dict] = []
 
         # ── DETECTION PHASE ──────────────────────────────────────────
         self._sse(session_id, make_phase_event("detection", "start"))
@@ -173,18 +373,35 @@ class MetaOrchestrator:
             "adzuna_results": adzuna_results,
         }
 
-        # ── D2: EXTERNAL BENCHMARKING ────────────────────────────────
+        # ── D2: EXTERNAL BENCHMARKING (multi-KPI) ────────────────────
         self._sse(session_id, make_node_event("D2", "active", "External Benchmarking"))
-        self._out(session_id, "detection", "D2", "🔍 Comparing against industry benchmarks...")
-        external = self.d2.run(role_title, internal.time_to_fill_days)
+        self._out(session_id, "detection", "D2", "🔍 Comparing 3 KPIs against industry benchmarks...")
+        external = self.d2.run_multi_kpi(role_title, internal.kpis)
         self._sse(session_id, make_node_event("D2", "complete"))
-        for bench in (external or []):
-            if isinstance(bench, dict):
-                name = bench.get("role_title") or bench.get("source", "Industry")
-                ttf = bench.get("time_to_fill_days", "N/A")
-                delta = bench.get("delta_pct", 0)
-                delta_str = f" ({delta:+.1f}% vs internal)" if delta else ""
-                self._out(session_id, "detection", "D2", f"**{name}**: TTF = {ttf}d{delta_str}")
+        for c in external.get("comparisons", []):
+            sev_icon = {"green": "✅", "amber": "🟡", "red": "🔴"}.get(c["severity"], "•")
+            unit = "d" if c["kpi"] == "time_to_fill" else ""
+            our = f"{c['our_value']:.1%}" if unit == "" else f"{c['our_value']:.1f}{unit}"
+            bench = f"{c['benchmark']:.1%}" if unit == "" else f"{c['benchmark']:.1f}{unit}"
+            self._out(session_id, "detection", "D2",
+                      f"{sev_icon} **{c['label']}**: {our} vs benchmark {bench} ({c['delta_pct']:+.1f}%)")
+
+        # NEW (Phase 4.5 T1.2): live salary signal computed from adzuna_postings vs hires.salary.
+        salary_signal = external.get("live_salary_signal")
+        if salary_signal:
+            status = salary_signal.get("status")
+            if status == "insufficient_data":
+                self._out(session_id, "detection", "D2",
+                          f"⚠️ **Salary vs live market**: insufficient data — {salary_signal.get('reason', '')}")
+            else:
+                sev_icon = {"green": "✅", "amber": "🟡", "red": "🔴"}.get(salary_signal["severity"], "•")
+                conf = " (low confidence)" if status == "low_confidence" else ""
+                self._out(session_id, "detection", "D2",
+                          f"{sev_icon} **Salary vs live market**{conf}: R{salary_signal['internal_median']:,.0f} our hires (n={salary_signal['internal_n']}) "
+                          f"vs R{salary_signal['adzuna_median']:,.0f} Adzuna median (n={salary_signal['adzuna_n']}) — {salary_signal['delta_pct']:+.1f}%")
+            # Fold the signal into market_data so writeups can cite it directly
+            # without re-deriving it. The writeup agent already gets market_data per phase.
+            market_data["salary_signal"] = salary_signal
 
         # ── D3: GAP ANALYSIS ─────────────────────────────────────────
         self._sse(session_id, make_node_event("D3", "active", "Gap Analysis"))
@@ -215,7 +432,14 @@ class MetaOrchestrator:
             msg = f"⚠️ **{metric_name}** {detail}" if detail else f"⚠️ **{metric_name}**"
             self._out(session_id, "detection", "D3", msg)
 
-        if gap.kaizen_required:
+        # User-supplied brief or target_kpi forces the Kaizen to proceed regardless of D3
+        forced_proceed = bool(problem_brief) or bool(target_kpi)
+        proceed = gap.kaizen_required or forced_proceed
+
+        if proceed and forced_proceed:
+            reason = "user-supplied brief" if problem_brief else f"targeted KPI: {target_kpi}"
+            self._out(session_id, "detection", "D3", f"**Kaizen Required**: Yes — {reason}")
+        elif gap.kaizen_required:
             self._out(session_id, "detection", "D3", "**Kaizen Required**: Yes — proceeding to DMAIC")
         else:
             self._out(session_id, "detection", "D3", "**Kaizen Required**: No — all metrics within acceptable range")
@@ -225,19 +449,34 @@ class MetaOrchestrator:
             "external": external,
             "gap": gap.__dict__,
             "market": market_data,
+            "problem_brief": problem_brief,
+            "target_kpi": target_kpi,
         }
 
-        if not gap.kaizen_required:
+        if not proceed:
             self._sse(session_id, make_phase_event("detection", "complete", detection_result))
             return KaizenSessionResult(session_id=session_id, phase="detection", detection=detection_result)
 
         self._sse(session_id, make_phase_event("detection", "complete", detection_result))
 
+        self._emit_writeup(session_id, "detection", detection_result, prior_writeups,
+                           role_title, problem_brief, data, market_data=market_data)
+        if not self._await_hitl(session_id, "detection", role_title, problem_brief, data):
+            clear_hitl_queue(session_id)
+            return KaizenSessionResult(session_id=session_id, phase="aborted",
+                                       detection=detection_result)
+
         # ── DEFINE ───────────────────────────────────────────────────
         self._sse(session_id, make_phase_event("define", "start"))
         self._sse(session_id, make_node_event("K1", "active", "Define (SIPOC)"))
         self._out(session_id, "define", "K1", "📋 Scoping problem statement and SIPOC...")
-        define = self.k1.run(gap.__dict__, session_id=session_id)
+        define = self.k1.run(
+            gap.__dict__,
+            session_id=session_id,
+            problem_brief=problem_brief,
+            target_kpi=target_kpi,
+            role_title=role_title,
+        )
         self._sse(session_id, make_node_event("K1", "complete"))
 
         self._out(session_id, "define", "K1", f"**Problem Statement**: {define.problem_statement}")
@@ -246,6 +485,13 @@ class MetaOrchestrator:
         self._out(session_id, "define", "K1", f"**Financial Impact**: {define.financial_impact}")
         self._out(session_id, "define", "K1", f"**KPI Target**: {define.kpi_target}")
         self._sse(session_id, make_phase_event("define", "complete"))
+
+        self._emit_writeup(session_id, "define", define.__dict__, prior_writeups,
+                           role_title, problem_brief, data, market_data=market_data)
+        if not self._await_hitl(session_id, "define", role_title, problem_brief, data):
+            clear_hitl_queue(session_id)
+            return KaizenSessionResult(session_id=session_id, phase="aborted",
+                                       detection=detection_result, define=define.__dict__)
 
         # ── MEASURE ──────────────────────────────────────────────────
         self._sse(session_id, make_phase_event("measure", "start"))
@@ -263,6 +509,14 @@ class MetaOrchestrator:
             self._out(session_id, "measure", "K2", f"**{key_label}**: {v}")
         self._out(session_id, "measure", "K2", f"**Summary**: {measure.baseline_summary}")
         self._sse(session_id, make_phase_event("measure", "complete"))
+
+        self._emit_writeup(session_id, "measure", measure.__dict__, prior_writeups,
+                           role_title, problem_brief, data, market_data=market_data)
+        if not self._await_hitl(session_id, "measure", role_title, problem_brief, data):
+            clear_hitl_queue(session_id)
+            return KaizenSessionResult(session_id=session_id, phase="aborted",
+                                       detection=detection_result, define=define.__dict__,
+                                       measure=measure.__dict__)
 
         # ── ANALYSE — pass on_step for per-call granularity ──────────
         self._sse(session_id, make_phase_event("analyse", "start"))
@@ -292,9 +546,28 @@ class MetaOrchestrator:
             self._out(session_id, "analyse", "K5",
                       f"🔸 **{category}**: {', '.join(causes)}")
 
+        # Phase 4.5 T2.1: surface RAG case studies that fed K4/K5 so the user
+        # sees the precedent base for the analysis.
+        rag_citations = getattr(analyse, "rag_citations", []) or []
+        if rag_citations:
+            self._out(session_id, "analyse", "K3",
+                      f"📚 **{len(rag_citations)} case study chunks** retrieved from `kaizen_case_studies` to anchor analysis:")
+            for c in rag_citations[:8]:  # cap display
+                branch = f" [{c['branch']}]" if c.get("branch") else ""
+                self._out(session_id, "analyse", "K3",
+                          f"   {c['id']}{branch}: {c['snippet'][:160]}")
+
         self._out(session_id, "analyse", "K3",
                   f"**Synthesis**: {analyse.synthesised_findings[:300]}...")
         self._sse(session_id, make_phase_event("analyse", "complete"))
+
+        self._emit_writeup(session_id, "analyse", analyse.__dict__, prior_writeups,
+                           role_title, problem_brief, data, market_data=market_data)
+        if not self._await_hitl(session_id, "analyse", role_title, problem_brief, data):
+            clear_hitl_queue(session_id)
+            return KaizenSessionResult(session_id=session_id, phase="aborted",
+                                       detection=detection_result, define=define.__dict__,
+                                       measure=measure.__dict__, analyse=analyse.__dict__)
 
         root_causes_str = str([
             {"perspective": f"Chain {i}", "causes": rc["causal_factors"]}
@@ -305,14 +578,42 @@ class MetaOrchestrator:
         self._sse(session_id, make_phase_event("improve", "start"))
         self._sse(session_id, make_node_event("K6", "active", "Improve (Interventions)"))
         self._out(session_id, "improve", "K6", "💡 Generating improvement interventions...")
-        improve = self.k6.run(root_causes_str, analyse.synthesised_findings, session_id=session_id)
+        # Offset K6's R-IDs by the analyse phase's citation count so a single
+        # numbering scheme spans the whole Kaizen.
+        analyse_citation_count = len(getattr(analyse, "rag_citations", []) or [])
+        improve = self.k6.run(
+            root_causes_str, analyse.synthesised_findings,
+            session_id=session_id, citation_id_offset=analyse_citation_count,
+        )
         self._sse(session_id, make_node_event("K6", "complete"))
 
         for inv in getattr(improve, "interventions", []):
+            ev = f" [{inv.evidence_id}]" if getattr(inv, "evidence_id", None) else ""
             self._out(session_id, "improve", "K6",
-                      f"📌 **{inv.title}** — {inv.description[:150]}")
+                      f"📌 **{inv.title}**{ev} — Impact={inv.impact}, Effort={inv.effort}, Priority={inv.priority_score}")
+            self._out(session_id, "improve", "K6", f"   {inv.description[:200]}")
         self._out(session_id, "improve", "K6", f"**Recommendation**: {improve.recommendation[:400]}")
+
+        # Surface K6's RAG case studies inline so the user sees the precedent
+        # base for the interventions (mirrors the K3 surfacing in analyse).
+        improve_citations = getattr(improve, "rag_citations", []) or []
+        if improve_citations:
+            self._out(session_id, "improve", "K6",
+                      f"📚 **{len(improve_citations)} case study chunks** retrieved to anchor interventions:")
+            for c in improve_citations[:6]:
+                self._out(session_id, "improve", "K6",
+                          f"   {c['id']}: {c['snippet'][:160]}")
+
         self._sse(session_id, make_phase_event("improve", "complete"))
+
+        self._emit_writeup(session_id, "improve", improve.__dict__, prior_writeups,
+                           role_title, problem_brief, data, market_data=market_data)
+        if not self._await_hitl(session_id, "improve", role_title, problem_brief, data):
+            clear_hitl_queue(session_id)
+            return KaizenSessionResult(session_id=session_id, phase="aborted",
+                                       detection=detection_result, define=define.__dict__,
+                                       measure=measure.__dict__, analyse=analyse.__dict__,
+                                       improve=improve.__dict__)
 
         # ── CONTROL ──────────────────────────────────────────────────
         self._sse(session_id, make_phase_event("control", "start"))
@@ -331,17 +632,30 @@ class MetaOrchestrator:
                           f"  • {item.action} — Owner: {item.owner}, Due: {item.due_date}")
         self._sse(session_id, make_phase_event("control", "complete"))
 
-        # Cost event
+        self._emit_writeup(session_id, "control", control.__dict__, prior_writeups,
+                           role_title, problem_brief, data, market_data=market_data)
+
+        # Cost event (USD + token breakdown)
         try:
-            cost_resp = self.supabase.table("agent_invocations").select("cost_usd").eq("session_id", session_id).execute()
-            total_cost = sum(r.get("cost_usd", 0) for r in (cost_resp.data or []))
-            self._sse(session_id, {
-                "type": "cost",
-                "total_usd": round(total_cost, 6),
-                "session_id": session_id,
-            })
+            cost_resp = self.supabase.table("agent_invocations").select(
+                "cost_usd, input_tokens, output_tokens, cached_tokens"
+            ).eq("session_id", session_id).execute()
+            rows = cost_resp.data or []
+            total_cost = sum(r.get("cost_usd", 0) or 0 for r in rows)
+            input_tokens = sum(r.get("input_tokens", 0) or 0 for r in rows)
+            output_tokens = sum(r.get("output_tokens", 0) or 0 for r in rows)
+            cached_tokens = sum(r.get("cached_tokens", 0) or 0 for r in rows)
+            self._sse(session_id, make_cost_event(
+                total_usd=total_cost,
+                session_id=session_id,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cached_tokens=cached_tokens,
+            ))
         except Exception:
             pass
+
+        clear_hitl_queue(session_id)
 
         return KaizenSessionResult(
             session_id=session_id, phase="complete",

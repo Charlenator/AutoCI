@@ -130,15 +130,14 @@ External APIs – E1..E7
 - **E3** – NewsAPI
 - **E4** – Google Calendar API
 - **E5** – Gmail API (metadata only)
-- **E6** – Anthropic API (Claude Sonnet & Opus)
-- **E7** – DeepSeek API
+- **E6** – DeepSeek API (sole LLM provider for the in-app pipeline)
 
 ---
 
 ## Agent Contracts & Protocols
 
 ### Five Whys – Atomic Call Protocol (K4)
-The single most important piece of code. Each "why" is a **separate LLM call** to Opus (extended thinking) via LiteLLM.
+The single most important piece of code. Each "why" is a **separate LLM call** to DeepSeek via LiteLLM.
 
 **Input per call**: level (1–5), original problem, parent answer (except level 1), role context, top-3 RAG precedents.  
 **Output**: a single causal answer with confidence, evidence references, and optional termination if no causal predecessor exists.  
@@ -175,11 +174,7 @@ Two touchpoints:
 ---
 
 ## LiteLLM Cost-Aware Routing (T3)
-A single routing table maps task classes to models:
-- Five Whys, net-new SQL → `claude-opus-4-7-thinking` (extended thinking)
-- Orchestration, DMAIC narrative, translation, research synthesis → `claude-sonnet-4-6`
-- Tagging, extraction, high-volume parsing → `deepseek-chat`
-Every call is logged to `agent_invocations` with cost, model, and duration.
+A single routing table maps task classes to models. Currently every task class — Five Whys, SQL generation, orchestration, DMAIC narrative, translation, research synthesis, tagging, extraction, parsing — routes to `deepseek-chat`. The router structure is preserved so multi-model routing can be reintroduced later without touching call sites; today it is intentionally a single-model pipeline (one API key, predictable cost). Every call is logged to `agent_invocations` with cost, model, duration, and per-call token counts (input/output/cached).
 
 ---
 
@@ -218,7 +213,7 @@ Persistent elements: cost ticker (F5, top-right) and optional Activity Log overl
 | Database + Vector | Supabase (pgvector) |
 | Embeddings | Supabase Edge Embeddings |
 | LLM Interface | LiteLLM |
-| LLMs | Claude Sonnet, Claude Opus (extended thinking), DeepSeek |
+| LLMs | DeepSeek (single-model pipeline; router preserved for future multi-model routing) |
 | MCP Server | Custom Analytics Library MCP (T1) – single MCP server |
 | Live job data | Adzuna API (free tier) |
 | Web research | Tavily + NewsAPI |

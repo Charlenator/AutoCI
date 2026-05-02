@@ -1,325 +1,403 @@
 "use client";
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React from "react";
 import {
   ReactFlow,
   Background,
   Controls,
   MiniMap,
-  useNodesState,
-  useEdgesState,
-  addEdge,
-  Connection,
+  Position,
   Node,
   Edge,
-} from 'reactflow';
-import 'reactflow/dist/base.css';
-import './system-diagram.css';
+  MarkerType,
+  Handle,
+} from "reactflow";
+import "reactflow/dist/base.css";
+import "./system-diagram.css";
 
-// Custom Node Components
-const TierNode = ({ data }: { data: any }) => (
-  <div className="tier-node">
-    <div className="tier-header" style={{ backgroundColor: data.color }}>
-      <span className="tier-icon">{data.icon}</span>
-      <span className="tier-title">{data.title}</span>
-    </div>
-    <div className="tier-content">
-      <div className="tier-description">{data.description}</div>
-      {data.children && (
-        <div className="tier-children">
-          {data.children.map((child: any, i: number) => (
-            <div key={i} className="tier-child">
-              <span className="child-bullet">{child.icon}</span>
-              <span className="child-label">{child.label}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  </div>
-);
+/* ───────────────────────────────────────────────────────────────
+ * AutoCI System Diagram — full agent + API map.
+ * Visual only. Planned components have a dashed border + lower opacity.
+ * Lanes (top → bottom): Frontend, API Gateway, Orchestrator, Detection,
+ * Kaizen, Specialists, Tools, Database, External APIs.
+ * ─────────────────────────────────────────────────────────────── */
 
-const ProcessNode = ({ data }: { data: any }) => (
-  <div className="process-node">
-    <div className="process-icon">{data.icon}</div>
-    <div className="process-title">{data.title}</div>
-    <div className="process-desc">{data.description}</div>
-  </div>
-);
+type Family =
+  | "frontend"
+  | "api"
+  | "orchestrator"
+  | "detection"
+  | "kaizen"
+  | "specialist"
+  | "tool"
+  | "database"
+  | "external"
+  | "planned";
 
-const HighlightNode = ({ data }: { data: any }) => (
-  <div className="highlight-node">
-    <div className="highlight-icon">{data.icon}</div>
-    <div className="highlight-title">{data.title}</div>
-    <div className="highlight-subtitle">{data.subtitle}</div>
-  </div>
-);
-
-// Type definitions for node data
-interface TierData {
-  title: string;
-  description: string;
-  color: string;
-  icon: string;
-  children: { icon: string; label: string }[];
-}
-
-interface HighlightData {
-  icon: string;
-  title: string;
-  subtitle: string;
-}
-
-interface ProcessData {
-  icon: string;
-  title: string;
-  description: string;
-}
-
-type NodeData = TierData | HighlightData | ProcessData;
-
-const nodeTypes = {
-  tier: TierNode,
-  process: ProcessNode,
-  highlight: HighlightNode,
+const FAMILY: Record<Family, { color: string; bg: string; label: string; icon: string }> = {
+  frontend:     { color: "#2563eb", bg: "#dbeafe", label: "Frontend",       icon: "🌐" },
+  api:          { color: "#7c3aed", bg: "#ede9fe", label: "API Gateway",    icon: "🔌" },
+  orchestrator: { color: "#ea580c", bg: "#ffedd5", label: "Orchestrator",   icon: "⚡" },
+  detection:    { color: "#ca8a04", bg: "#fef9c3", label: "Detection",      icon: "🔍" },
+  kaizen:       { color: "#dc2626", bg: "#fee2e2", label: "Kaizen (DMAIC)", icon: "🔄" },
+  specialist:   { color: "#0d9488", bg: "#ccfbf1", label: "Specialists",    icon: "🧠" },
+  tool:         { color: "#475569", bg: "#e2e8f0", label: "Tools",          icon: "🛠" },
+  database:     { color: "#059669", bg: "#d1fae5", label: "Database",       icon: "🗄" },
+  external:     { color: "#be185d", bg: "#fce7f3", label: "External APIs",  icon: "🌍" },
+  planned:      { color: "#6b7280", bg: "#f1f5f9", label: "Planned",        icon: "📋" },
 };
 
-// Node Definitions
+interface ServiceNodeData {
+  id: string;        // short ID like D1, K_WRITEUP
+  title: string;     // human label
+  desc: string;      // one-line description
+  family: Family;
+  planned?: boolean;
+}
+
+const ServiceNode = ({ data }: { data: ServiceNodeData }) => {
+  const fam = FAMILY[data.family];
+  return (
+    <div
+      className={`service-node ${data.planned ? "planned" : ""}`}
+      style={{
+        borderColor: fam.color,
+        background: fam.bg,
+      }}
+    >
+      <Handle type="target" position={Position.Top} style={{ background: fam.color, width: 8, height: 8 }} />
+      <div className="service-id" style={{ background: fam.color }}>
+        {data.id}
+      </div>
+      <div className="service-title">{data.title}</div>
+      <div className="service-desc">{data.desc}</div>
+      <Handle type="source" position={Position.Bottom} style={{ background: fam.color, width: 8, height: 8 }} />
+    </div>
+  );
+};
+
+const nodeTypes = { service: ServiceNode };
+
+/* ── Layout grid (x,y in pixels) ────────────────────────────────
+ * Each "lane" is a horizontal row spaced 180px apart vertically.
+ * Within a lane, nodes are spaced ~220px apart horizontally.
+ */
+
+const LANE_Y = {
+  frontend: 0,
+  api: 180,
+  orch: 380,
+  detection: 580,
+  kaizen: 580,
+  specialist: 580,
+  kaizenSub: 760, // K4/K5 under K3, K_WRITEUP after K7
+  tool: 940,
+  db: 1120,
+  external: 1300,
+};
+
 const initialNodes: Node[] = [
-  // Tier 3: Meta-Orchestrator
+  // ── FRONTEND (top) ────────────────────────────────────────────
   {
-    id: 'tier3',
-    type: 'tier',
-    position: { x: 400, y: 50 },
+    id: "F1", type: "service", position: { x: 880, y: LANE_Y.frontend },
     data: {
-      title: 'Tier 3 — Meta-Orchestrator',
-      description: '"What problems should we be solving?"',
-      color: '#7c3aed',
-      icon: '⚡',
-      children: [
-        { icon: '🔍', label: 'Problem Prioritization' },
-        { icon: '📊', label: 'Impact Scoring' },
-        { icon: '🎯', label: 'Kaizen Launch' },
-      ],
-    } as TierData,
+      id: "F1", title: "Dashboard UI",
+      desc: "Next.js + SSE — KPI tiles, chat, timeline, HITL gates, writeup cards",
+      family: "frontend",
+    } as ServiceNodeData,
   },
 
-  // Tier 2: Detection Layer
-  {
-    id: 'tier2',
-    type: 'tier',
-    position: { x: 400, y: 250 },
-    data: {
-      title: 'Tier 2 — Problem Detection',
-      description: 'Internal + External Benchmarking + Gap Analysis',
-      color: '#d97706',
-      icon: '🔍',
-      children: [
-        { icon: '📈', label: 'Internal Benchmarks' },
-        { icon: '🌍', label: 'External Data (Adzuna)' },
-        { icon: '⚠️', label: 'Gap Severity Score' },
-      ],
-    } as TierData,
-  },
+  // ── API GATEWAY ────────────────────────────────────────────────
+  { id: "A1",  type: "service", position: { x: 100,  y: LANE_Y.api },
+    data: { id: "A1",  title: "POST /trigger/manual",       desc: "Launch Kaizen with custom brief", family: "api" } as ServiceNodeData },
+  { id: "A2",  type: "service", position: { x: 340,  y: LANE_Y.api },
+    data: { id: "A2",  title: "POST /trigger/goal-review",  desc: "Auto-pick worst KPI gap",         family: "api" } as ServiceNodeData },
+  { id: "A3",  type: "service", position: { x: 580,  y: LANE_Y.api },
+    data: { id: "A3",  title: "GET /sessions/:id/stream",   desc: "SSE event stream",                family: "api" } as ServiceNodeData },
+  { id: "A4",  type: "service", position: { x: 820,  y: LANE_Y.api },
+    data: { id: "A4",  title: "POST /sessions/:id/respond", desc: "HITL: advance / ask / abort",     family: "api" } as ServiceNodeData },
+  { id: "A5",  type: "service", position: { x: 1060, y: LANE_Y.api },
+    data: { id: "A5",  title: "POST /chat/query",           desc: "S1 → S2/S3 routing",              family: "api" } as ServiceNodeData },
+  { id: "A6",  type: "service", position: { x: 1300, y: LANE_Y.api },
+    data: { id: "A6",  title: "GET /metrics/kpis",          desc: "3 KPI tiles, role-scoped",        family: "api" } as ServiceNodeData },
+  { id: "A7",  type: "service", position: { x: 1540, y: LANE_Y.api },
+    data: { id: "A7",  title: "GET /metrics/cost",          desc: "USD + tokens (cached / uncached)", family: "api" } as ServiceNodeData },
+  { id: "A8",  type: "service", position: { x: 1780, y: LANE_Y.api },
+    data: { id: "A8",  title: "POST /knowledge/{seed,update}", desc: "Seed corpora + live API ingest", family: "api" } as ServiceNodeData },
 
-  // Tier 1: Kaizen Engine
-  {
-    id: 'tier1',
-    type: 'tier',
-    position: { x: 400, y: 500 },
-    data: {
-      title: 'Tier 1 — Kaizen Engine (DMAIC)',
-      description: 'Phase-gated. Every step a Durable DBOS workflow',
-      color: '#dc2626',
-      icon: '🔄',
-      children: [
-        { icon: '📋', label: 'Define (SIPOC)' },
-        { icon: '📏', label: 'Measure (Metrics)' },
-        { icon: '🔎', label: 'Analyse (5 Whys)' },
-        { icon: '📈', label: 'Improve (Matrix)' },
-        { icon: '✅', label: 'Control (Kanban)' },
-      ],
-    } as TierData,
-  },
+  // ── ORCHESTRATOR ───────────────────────────────────────────────
+  { id: "O2",  type: "service", position: { x: 880, y: LANE_Y.orch },
+    data: { id: "O2",  title: "MetaOrchestrator",
+      desc: "Phase-gated DMAIC; HITL queue.Queue; SSE pump",
+      family: "orchestrator" } as ServiceNodeData },
 
-  // UI Layer - Consolidated
-  {
-    id: 'ui',
-    type: 'tier',
-    position: { x: 750, y: 200 },
-    data: {
-      title: 'UI Control Panel',
-      description: 'Single interface, 5 views',
-      color: '#2563eb',
-      icon: '🌐',
-      children: [
-        { icon: '💬', label: 'Chat + Queries' },
-        { icon: '📊', label: 'Live Graph' },
-        { icon: '📄', label: 'Report Builder' },
-        { icon: '💰', label: 'Cost Tracker' },
-        { icon: '⚙️', label: 'Demo Controls' },
-      ],
-    } as TierData,
-  },
+  // ── DETECTION (left cluster, lane 4) ───────────────────────────
+  { id: "D1", type: "service", position: { x: 100, y: LANE_Y.detection },
+    data: { id: "D1", title: "Internal Benchmarking", desc: "Compute TTF, conversion, OAR (role-scoped)", family: "detection" } as ServiceNodeData },
+  { id: "D2", type: "service", position: { x: 340, y: LANE_Y.detection },
+    data: { id: "D2", title: "External Benchmarking", desc: "industry_benchmarks + live Adzuna salary (S1)", family: "detection" } as ServiceNodeData },
+  { id: "D3", type: "service", position: { x: 580, y: LANE_Y.detection },
+    data: { id: "D3", title: "Gap Analysis", desc: "Severity per KPI, kaizen_required gate", family: "detection" } as ServiceNodeData },
 
-  // Process Highlights
-  {
-    id: 'fivewhys',
-    type: 'highlight',
-    position: { x: 650, y: 450 },
-    data: {
-      icon: '🔢',
-      title: 'Five Whys',
-      subtitle: '5 atomic sequential calls — no shortcuts',
-    } as HighlightData,
-  },
-  {
-    id: 'ishikawa',
-    type: 'highlight',
-    position: { x: 650, y: 550 },
-    data: {
-      icon: '🌳',
-      title: 'Ishikawa',
-      subtitle: '6 parallel branches — root cause mapping',
-    } as HighlightData,
-  },
+  // ── KAIZEN (centre cluster) ────────────────────────────────────
+  { id: "K1", type: "service", position: { x: 820,  y: LANE_Y.kaizen },
+    data: { id: "K1", title: "Define (SIPOC)",       desc: "Brief / KPI / gap framing", family: "kaizen" } as ServiceNodeData },
+  { id: "K2", type: "service", position: { x: 1060, y: LANE_Y.kaizen },
+    data: { id: "K2", title: "Measure",              desc: "Baseline KPIs", family: "kaizen" } as ServiceNodeData },
+  { id: "K3", type: "service", position: { x: 1300, y: LANE_Y.kaizen },
+    data: { id: "K3", title: "Analyse Host",         desc: "Spawns K4 + K5; aggregates citations", family: "kaizen" } as ServiceNodeData },
 
-  // Key Metrics
-  {
-    id: 'metrics',
-    type: 'process',
-    position: { x: 150, y: 350 },
-    data: {
-      icon: '⚡',
-      title: '90 seconds • $0.18',
-      description: 'Consulting-grade report, Black Belt readable',
-    } as ProcessData,
-  },
+  // ── KAIZEN sub-row (K4, K5 under K3; K6, K7, K_WRITEUP after) ──
+  { id: "K4", type: "service", position: { x: 1180, y: LANE_Y.kaizenSub },
+    data: { id: "K4", title: "Five Whys", desc: "5 × 3 perspectives, RAG-grounded", family: "kaizen" } as ServiceNodeData },
+  { id: "K5", type: "service", position: { x: 1420, y: LANE_Y.kaizenSub },
+    data: { id: "K5", title: "Ishikawa", desc: "6 branches, per-branch RAG", family: "kaizen" } as ServiceNodeData },
+  { id: "K6", type: "service", position: { x: 820,  y: LANE_Y.kaizenSub },
+    data: { id: "K6", title: "Improve", desc: "Interventions + Impact/Effort matrix, RAG-grounded", family: "kaizen" } as ServiceNodeData },
+  { id: "K7", type: "service", position: { x: 1060, y: LANE_Y.kaizenSub },
+    data: { id: "K7", title: "Control", desc: "Kanban (To Do only) + owner / due / KPI", family: "kaizen" } as ServiceNodeData },
+  { id: "KW", type: "service", position: { x: 580,  y: LANE_Y.kaizenSub },
+    data: { id: "K_WRITEUP", title: "Amazon-Narrative Writeup",
+      desc: "1 DeepSeek call/phase: headline, TL;DR, findings, citations",
+      family: "kaizen" } as ServiceNodeData },
+  { id: "KD", type: "service", position: { x: 340,  y: LANE_Y.kaizenSub },
+    data: { id: "K_DEBRIEF", title: "Email Debrief",
+      desc: "Compiles all writeups → Markdown → Gmail send",
+      family: "kaizen", planned: true } as ServiceNodeData },
 
-  // Data Layer
-  {
-    id: 'data',
-    type: 'process',
-    position: { x: 150, y: 500 },
-    data: {
-      icon: '🗄️',
-      title: 'Supabase + pgvector',
-      description: 'Persistent state, vector search',
-    } as ProcessData,
-  },
+  // ── SPECIALISTS (right cluster) ────────────────────────────────
+  { id: "S1", type: "service", position: { x: 1660, y: LANE_Y.specialist },
+    data: { id: "S1", title: "Translation (Intent)", desc: "Routes user query → S2 or S3", family: "specialist" } as ServiceNodeData },
+  { id: "S2", type: "service", position: { x: 1660, y: LANE_Y.kaizenSub },
+    data: { id: "S2", title: "RAG Retrieval", desc: "match_chunks RPC + corpus filter", family: "specialist" } as ServiceNodeData },
+  { id: "S3", type: "service", position: { x: 1900, y: LANE_Y.specialist },
+    data: { id: "S3", title: "SQL Agent", desc: "T1 analytics formulas + LLM-generated SQL", family: "specialist" } as ServiceNodeData },
+  { id: "S4", type: "service", position: { x: 1900, y: LANE_Y.kaizenSub },
+    data: { id: "S4", title: "Research", desc: "Tavily + NewsAPI + Adzuna calls + persist", family: "specialist" } as ServiceNodeData },
+  { id: "S5", type: "service", position: { x: 2140, y: LANE_Y.specialist },
+    data: { id: "S5", title: "Interview Prep", desc: "CV → JD fit + Calendar slots", family: "specialist", planned: true } as ServiceNodeData },
+
+  // ── TOOLS ──────────────────────────────────────────────────────
+  { id: "T1", type: "service", position: { x: 340,  y: LANE_Y.tool },
+    data: { id: "T1", title: "Analytics Library", desc: "TTF, conversion, OAR, source yield (no LLM)", family: "tool" } as ServiceNodeData },
+  { id: "T2", type: "service", position: { x: 580,  y: LANE_Y.tool },
+    data: { id: "T2", title: "Validation Interceptor", desc: "Pydantic + sample size + z-score outliers", family: "tool" } as ServiceNodeData },
+  { id: "T3", type: "service", position: { x: 820,  y: LANE_Y.tool },
+    data: { id: "T3", title: "LiteLLM Router", desc: "Single-model DeepSeek; computes USD from tokens", family: "tool" } as ServiceNodeData },
+  { id: "T4", type: "service", position: { x: 1060, y: LANE_Y.tool },
+    data: { id: "T4", title: "Embeddings", desc: "OpenAI ada-002 → 1536-d vectors", family: "tool" } as ServiceNodeData },
+
+  // ── DATABASE ───────────────────────────────────────────────────
+  { id: "DB_TABLES", type: "service", position: { x: 580, y: LANE_Y.db },
+    data: { id: "Supabase Tables",
+      title: "Pipeline + Sessions",
+      desc: "roles · candidates · pipeline_events · hires · offer_outcomes · industry_benchmarks · kaizen_sessions · agent_invocations · adzuna_postings",
+      family: "database" } as ServiceNodeData },
+  { id: "DB_RAG", type: "service", position: { x: 1060, y: LANE_Y.db },
+    data: { id: "corpus_chunks",
+      title: "RAG (pgvector)",
+      desc: "6 corpora · ivfflat index · match_chunks RPC",
+      family: "database" } as ServiceNodeData },
+
+  // ── EXTERNAL APIs ──────────────────────────────────────────────
+  { id: "E1", type: "service", position: { x: 100,  y: LANE_Y.external },
+    data: { id: "E1", title: "DeepSeek", desc: "Sole LLM provider — chat completion", family: "external" } as ServiceNodeData },
+  { id: "E2", type: "service", position: { x: 340,  y: LANE_Y.external },
+    data: { id: "E2", title: "Adzuna", desc: "Live job postings + salary", family: "external" } as ServiceNodeData },
+  { id: "E3", type: "service", position: { x: 580,  y: LANE_Y.external },
+    data: { id: "E3", title: "Tavily", desc: "Web research", family: "external" } as ServiceNodeData },
+  { id: "E4", type: "service", position: { x: 820,  y: LANE_Y.external },
+    data: { id: "E4", title: "NewsAPI", desc: "Industry news", family: "external" } as ServiceNodeData },
+  { id: "E5", type: "service", position: { x: 1060, y: LANE_Y.external },
+    data: { id: "E5", title: "OpenAI Embeddings", desc: "ada-002 → 1536-d vectors", family: "external" } as ServiceNodeData },
+  { id: "E6", type: "service", position: { x: 1300, y: LANE_Y.external },
+    data: { id: "E6", title: "Google Calendar", desc: "Free/busy + slot proposal", family: "external", planned: true } as ServiceNodeData },
+  { id: "E7", type: "service", position: { x: 1540, y: LANE_Y.external },
+    data: { id: "E7", title: "Gmail API", desc: "Send Kaizen debrief + draft invites", family: "external", planned: true } as ServiceNodeData },
 ];
 
-// Edge Definitions
+/* ── Edges ──────────────────────────────────────────────────────
+ * Conventions:
+ * - Solid lines: data flow at runtime
+ * - Dashed lines: utility / cross-cutting (SSE pump, logging, persistence)
+ * - Animated: hot path during a Kaizen
+ */
+const edge = (
+  id: string, source: string, target: string,
+  opts: { color?: string; dashed?: boolean; animated?: boolean; label?: string } = {}
+): Edge => ({
+  id, source, target,
+  animated: opts.animated,
+  label: opts.label,
+  labelStyle: { fontSize: 10, fontWeight: 500, fill: "#475569" },
+  labelBgStyle: { fill: "#fff", fillOpacity: 0.85 },
+  labelBgPadding: [3, 5],
+  labelBgBorderRadius: 4,
+  style: {
+    stroke: opts.color || "#94a3b8",
+    strokeWidth: 2,
+    strokeDasharray: opts.dashed ? "5 4" : undefined,
+  },
+  markerEnd: { type: MarkerType.ArrowClosed, color: opts.color || "#94a3b8", width: 16, height: 16 },
+});
+
 const initialEdges: Edge[] = [
-  // Main flow: Detection → Orchestration → Kaizen
-  { id: 'e-tier2-tier3', source: 'tier2', target: 'tier3', animated: true, style: { stroke: '#d97706', strokeWidth: 3 } },
-  { id: 'e-tier1-tier2', source: 'tier1', target: 'tier2', animated: true, style: { stroke: '#dc2626', strokeWidth: 3 } },
+  // Frontend → API Gateway
+  edge("e-F1-A1", "F1", "A1", { color: FAMILY.api.color }),
+  edge("e-F1-A2", "F1", "A2", { color: FAMILY.api.color }),
+  edge("e-F1-A3", "F1", "A3", { color: FAMILY.api.color, animated: true, label: "SSE" }),
+  edge("e-F1-A4", "F1", "A4", { color: FAMILY.api.color }),
+  edge("e-F1-A5", "F1", "A5", { color: FAMILY.api.color }),
+  edge("e-F1-A6", "F1", "A6", { color: FAMILY.api.color }),
+  edge("e-F1-A7", "F1", "A7", { color: FAMILY.api.color, dashed: true }),
+  edge("e-F1-A8", "F1", "A8", { color: FAMILY.api.color, dashed: true }),
 
-  // UI interactions
-  { id: 'e-ui-tier3', source: 'ui', target: 'tier3', style: { stroke: '#2563eb', strokeWidth: 2, strokeDasharray: '5,5' } },
-  { id: 'e-ui-tier1', source: 'ui', target: 'tier1', style: { stroke: '#2563eb', strokeWidth: 2, strokeDasharray: '5,5' } },
+  // API Gateway → Orchestrator
+  edge("e-A1-O2", "A1", "O2", { color: FAMILY.orchestrator.color, animated: true }),
+  edge("e-A2-O2", "A2", "O2", { color: FAMILY.orchestrator.color, animated: true }),
+  edge("e-A3-O2", "A3", "O2", { color: FAMILY.orchestrator.color, dashed: true, label: "drains queue" }),
+  edge("e-A4-O2", "A4", "O2", { color: FAMILY.orchestrator.color, label: "HITL" }),
 
-  // Process details
-  { id: 'e-tier1-whys', source: 'tier1', target: 'fivewhys', style: { stroke: '#dc2626', strokeWidth: 2 } },
-  { id: 'e-tier1-ishikawa', source: 'tier1', target: 'ishikawa', style: { stroke: '#dc2626', strokeWidth: 2 } },
+  // /chat/query → S1 (NOT through orchestrator)
+  edge("e-A5-S1", "A5", "S1", { color: FAMILY.specialist.color, animated: true }),
 
-  // Infrastructure
-  { id: 'e-tier1-metrics', source: 'tier1', target: 'metrics', style: { stroke: '#6b7280', strokeWidth: 1 } },
-  { id: 'e-tier1-data', source: 'tier1', target: 'data', style: { stroke: '#6b7280', strokeWidth: 1 } },
-  { id: 'e-tier2-data', source: 'tier2', target: 'data', style: { stroke: '#6b7280', strokeWidth: 1 } },
-  { id: 'e-tier3-data', source: 'tier3', target: 'data', style: { stroke: '#6b7280', strokeWidth: 1 } },
+  // Orchestrator → Detection (sequential)
+  edge("e-O2-D1", "O2", "D1", { color: FAMILY.detection.color, animated: true }),
+  edge("e-O2-D2", "O2", "D2", { color: FAMILY.detection.color, animated: true }),
+  edge("e-O2-D3", "O2", "D3", { color: FAMILY.detection.color, animated: true }),
+
+  // Orchestrator → Kaizen phases
+  edge("e-O2-K1", "O2", "K1", { color: FAMILY.kaizen.color, animated: true }),
+  edge("e-O2-K2", "O2", "K2", { color: FAMILY.kaizen.color, animated: true }),
+  edge("e-O2-K3", "O2", "K3", { color: FAMILY.kaizen.color, animated: true }),
+  edge("e-O2-K6", "O2", "K6", { color: FAMILY.kaizen.color, animated: true }),
+  edge("e-O2-K7", "O2", "K7", { color: FAMILY.kaizen.color, animated: true }),
+  edge("e-O2-KW", "O2", "KW", { color: FAMILY.kaizen.color, label: "after each phase" }),
+  edge("e-O2-KD", "O2", "KD", { color: FAMILY.kaizen.color, dashed: true, label: "post-Kaizen" }),
+
+  // K3 → K4 + K5 (sub-orchestration)
+  edge("e-K3-K4", "K3", "K4", { color: FAMILY.kaizen.color }),
+  edge("e-K3-K5", "K3", "K5", { color: FAMILY.kaizen.color }),
+
+  // Orchestrator → Specialists (research path + ask handler)
+  edge("e-O2-S4", "O2", "S4", { color: FAMILY.specialist.color, label: "fetch market_data" }),
+  edge("e-O2-S2", "O2", "S2", { color: FAMILY.specialist.color, dashed: true, label: "ask path" }),
+  edge("e-O2-S3", "O2", "S3", { color: FAMILY.specialist.color, dashed: true, label: "ask path" }),
+
+  // S1 routes to S2/S3
+  edge("e-S1-S2", "S1", "S2", { color: FAMILY.specialist.color }),
+  edge("e-S1-S3", "S1", "S3", { color: FAMILY.specialist.color }),
+
+  // K4/K5/K6 use S2 (RAG) for case studies — Phase 4.5 T2.1
+  edge("e-K4-S2", "K4", "S2", { color: FAMILY.specialist.color, dashed: true, label: "case studies" }),
+  edge("e-K5-S2", "K5", "S2", { color: FAMILY.specialist.color, dashed: true }),
+  edge("e-K6-S2", "K6", "S2", { color: FAMILY.specialist.color, dashed: true }),
+
+  // Detection → Tools
+  edge("e-D1-T1", "D1", "T1", { color: FAMILY.tool.color }),
+  edge("e-D2-T1", "D2", "T1", { color: FAMILY.tool.color }),
+
+  // All LLM-using agents → T3 (LiteLLM)
+  edge("e-D3-T3",  "D3", "T3", { color: FAMILY.tool.color }),
+  edge("e-K1-T3",  "K1", "T3", { color: FAMILY.tool.color }),
+  edge("e-K2-T3",  "K2", "T3", { color: FAMILY.tool.color }),
+  edge("e-K3-T3",  "K3", "T3", { color: FAMILY.tool.color }),
+  edge("e-K4-T3",  "K4", "T3", { color: FAMILY.tool.color }),
+  edge("e-K5-T3",  "K5", "T3", { color: FAMILY.tool.color }),
+  edge("e-K6-T3",  "K6", "T3", { color: FAMILY.tool.color }),
+  edge("e-K7-T3",  "K7", "T3", { color: FAMILY.tool.color }),
+  edge("e-KW-T3",  "KW", "T3", { color: FAMILY.tool.color }),
+  edge("e-S1-T3",  "S1", "T3", { color: FAMILY.tool.color, dashed: true }),
+  edge("e-S3-T3",  "S3", "T3", { color: FAMILY.tool.color }),
+
+  // T3 → DeepSeek (sole LLM provider)
+  edge("e-T3-E1", "T3", "E1", { color: FAMILY.external.color, animated: true }),
+
+  // S2 → T4 (embed query) → OpenAI; S2 → DB_RAG (match_chunks)
+  edge("e-S2-T4", "S2", "T4", { color: FAMILY.tool.color }),
+  edge("e-T4-E5", "T4", "E5", { color: FAMILY.external.color }),
+  edge("e-S2-DBRAG", "S2", "DB_RAG", { color: FAMILY.database.color, label: "match_chunks" }),
+
+  // S4 → External live APIs
+  edge("e-S4-E2", "S4", "E2", { color: FAMILY.external.color }),
+  edge("e-S4-E3", "S4", "E3", { color: FAMILY.external.color }),
+  edge("e-S4-E4", "S4", "E4", { color: FAMILY.external.color }),
+  edge("e-S4-T4",  "S4", "T4", { color: FAMILY.tool.color, dashed: true, label: "embed → corpus" }),
+
+  // T2 wraps every agent (validation interceptor) — represented as one cross-edge
+  edge("e-T2-O2",  "T2", "O2", { color: FAMILY.tool.color, dashed: true, label: "validates" }),
+
+  // Persistence: all agents write to Supabase tables; sample edges
+  edge("e-O2-DBT", "O2", "DB_TABLES", { color: FAMILY.database.color, label: "kaizen_sessions" }),
+  edge("e-T3-DBT", "T3", "DB_TABLES", { color: FAMILY.database.color, dashed: true, label: "agent_invocations" }),
+  edge("e-S4-DBT", "S4", "DB_TABLES", { color: FAMILY.database.color, dashed: true, label: "adzuna_postings" }),
+  edge("e-S4-DBRAG","S4","DB_RAG",   { color: FAMILY.database.color, dashed: true, label: "embed → chunks" }),
+  edge("e-D1-DBT", "D1", "DB_TABLES", { color: FAMILY.database.color, dashed: true }),
+  edge("e-D2-DBT", "D2", "DB_TABLES", { color: FAMILY.database.color, dashed: true }),
+  edge("e-S3-DBT", "S3", "DB_TABLES", { color: FAMILY.database.color, dashed: true }),
+
+  // Planned: K_DEBRIEF + S5 → Google APIs
+  edge("e-KD-E7", "KD", "E7", { color: FAMILY.external.color, dashed: true }),
+  edge("e-S5-E6", "S5", "E6", { color: FAMILY.external.color, dashed: true }),
+  edge("e-S5-E7", "S5", "E7", { color: FAMILY.external.color, dashed: true }),
 ];
 
-// Legend
 const Legend = () => (
   <div className="legend">
-    <h3>System Story</h3>
+    <h3>Components</h3>
     <div className="legend-items">
-      <div className="legend-item"><div className="legend-color" style={{ backgroundColor: '#7c3aed' }} />Meta-Orchestrator</div>
-      <div className="legend-item"><div className="legend-color" style={{ backgroundColor: '#d97706' }} />Detection</div>
-      <div className="legend-item"><div className="legend-color" style={{ backgroundColor: '#dc2626' }} />Kaizen Engine</div>
-      <div className="legend-item"><div className="legend-color" style={{ backgroundColor: '#2563eb' }} />UI Control</div>
+      {Object.entries(FAMILY).map(([key, fam]) => (
+        <div key={key} className="legend-item">
+          <div className="legend-color" style={{ background: fam.color }} />
+          <span>{fam.icon} {fam.label}</span>
+        </div>
+      ))}
+    </div>
+    <div className="legend-divider" />
+    <div className="legend-edge-key">
+      <div className="legend-edge"><span className="line solid" /> Runtime data flow</div>
+      <div className="legend-edge"><span className="line dashed" /> Utility / persistence</div>
+      <div className="legend-edge"><span className="line animated" /> Hot path during Kaizen</div>
     </div>
   </div>
 );
 
-// Main Component
 export default function SystemDiagram() {
-  const [nodes] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
-
-  const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge(params, eds)),
-    [setEdges]
-  );
-
   return (
     <div className="system-diagram-container">
       <header className="diagram-header">
         <div className="header-content">
           <h1>AutoCI System Architecture</h1>
-          <p>Six Sigma methodology wired into the architecture — not the prompt</p>
+          <p>Full agent + API map — frontend ➜ orchestrator ➜ DMAIC ➜ data + external APIs</p>
         </div>
       </header>
 
       <div className="diagram-wrapper">
         <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
+          nodes={initialNodes}
+          edges={initialEdges}
           nodeTypes={nodeTypes}
           fitView
-          attributionPosition="bottom-left"
-          minZoom={0.1}
-          maxZoom={2}
+          fitViewOptions={{ padding: 0.15 }}
+          minZoom={0.2}
+          maxZoom={1.6}
           proOptions={{ hideAttribution: true }}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          elementsSelectable
         >
-          <Background color="#cbd5e1" gap={20} />
+          <Background color="#cbd5e1" gap={24} />
           <Controls />
-          <MiniMap 
-            style={{ width: 200, height: 150, borderRadius: '8px' }}
-            nodeColor={(node) => {
-              switch (node.data?.color) {
-                case '#7c3aed': return '#7c3aed';
-                case '#d97706': return '#d97706';
-                case '#dc2626': return '#dc2626';
-                case '#2563eb': return '#2563eb';
-                default: return '#64748b';
-              }
+          <MiniMap
+            style={{ width: 220, height: 160, borderRadius: 8 }}
+            nodeColor={(n) => {
+              const fam = (n.data as ServiceNodeData)?.family;
+              return fam ? FAMILY[fam].color : "#94a3b8";
             }}
           />
         </ReactFlow>
 
         <Legend />
-      </div>
-
-      <div className="diagram-footer">
-        <div className="footer-content">
-          <div className="system-summary">
-            <h3>The Architecture Enforces Rigour</h3>
-            <p>
-              Five Whys runs as <strong>five sequential atomic calls</strong> — each must commit before the next begins. 
-              DMAIC phase gates prevent jumping from problem to solution. 
-              The model has <em>no path around the logic</em>. 
-              Result: Consulting-grade analysis in 90 seconds for $0.18.
-            </p>
-          </div>
-          <div className="key-metrics">
-            <div className="metric">
-              <span className="metric-value">90s</span>
-              <span className="metric-label">Analysis Time</span>
-            </div>
-            <div className="metric">
-              <span className="metric-value">$0.18</span>
-              <span className="metric-label">Per Kaizen</span>
-            </div>
-            <div className="metric">
-              <span className="metric-value">Phase-Gated</span>
-              <span className="metric-label">No Shortcuts</span>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );

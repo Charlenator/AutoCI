@@ -1,2 +1,0 @@
-Detection layer (D1, D2, D3)
-Test: hardcode fake "metric miss" event, run D1+D2, D3 outputs Problem Brief

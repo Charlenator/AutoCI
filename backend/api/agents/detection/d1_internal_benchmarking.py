@@ -10,6 +10,7 @@ class InternalBenchmarkSchema(BaseModel):
     stage_conversions: dict
     offer_acceptance_rate: float
     source_yields: dict
+    kpis: dict
     validity: dict
 
 @dataclass
@@ -18,6 +19,7 @@ class InternalBenchmarkResult:
     stage_conversions: dict
     offer_acceptance_rate: float
     source_yields: dict
+    kpis: dict           # Clean 3-KPI snapshot: {time_to_fill, conversion_rate, offer_acceptance}
     outlier_warnings: list[str]
     validity: dict
 
@@ -40,12 +42,20 @@ class D1InternalBenchmarkingAgent:
 
         oar = self.analytics.offer_acceptance_rate(hires, offer_outcomes)
         source_yields = self.analytics.source_yield(pipeline_events, candidates)
+        conversion = self.analytics.applied_to_hire_rate(pipeline_events, hires)
+
+        kpis = {
+            "time_to_fill": {"value": round(ttf, 1), "unit": "days", "label": "Time to Fill"},
+            "conversion_rate": {"value": round(conversion, 4), "unit": "ratio", "label": "Applied → Hire"},
+            "offer_acceptance": {"value": round(oar, 4), "unit": "ratio", "label": "Offer Acceptance"},
+        }
 
         return InternalBenchmarkResult(
             time_to_fill_days=ttf,
             stage_conversions=stage_conversions,
             offer_acceptance_rate=oar,
             source_yields=source_yields,
+            kpis=kpis,
             outlier_warnings=[],
             validity={"data_points": len(pipeline_events)},
         )

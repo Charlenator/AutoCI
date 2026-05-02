@@ -80,16 +80,18 @@ The challenge example: *"Fetch event data from calendar and email, cross-verify 
 
 ## Overall Evaluation
 
+> **Updated 2026-05-02**: Phase 1-3 of the post-submission iteration are complete. Tool integration and data pipeline scores unchanged (Calendar/Email work targeted for Phase 6). Multi-KPI detection, token-level cost tracking, and generic Kaizen triggering improve traceability + analytics depth.
+
 | Dimension | Score | Comments |
 |---|---|---|
-| **Architecture & Design** | ✅ 90% | Clean agent architecture (Detection → Define → Measure → Analyse → Improve → Control), well-structured SSE event system, Supabase persistence, agent separation clear. |
-| **RAG Pipeline** | ✅ **85%** | Full pipeline operational: `match_chunks` RPC + real embeddings + 5 corpora (65 chunks) + 3 structured documents seeded on startup. Query routing through S1. |
-| **Tool Integration** | ❌ 20% | Only 1/3 required tools. Web APIs done well, but no calendar or email. |
-| **Data Pipeline** | ❌ 15% | Extraction exists (web APIs) but cleanse/verify/export are absent. |
-| **Deployment & Demo** | ✅ 85% | Working frontend + backend, SSE streaming, real-time timeline. Preloaded synthetic dataset + RAG corpus. Localhost only — no cloud deployment. |
-| **Traceability** | ⚠️ 40% | Agent invocation logs exist, cost tracking works, similarity scores from RPC, but source citations and data verification are weak. |
+| **Architecture & Design** | ✅ 92% | Clean agent architecture, SSE event system, Supabase persistence. Detection layer now multi-KPI (Phase 2). Generic Kaizen triggers (Phase 3). |
+| **RAG Pipeline** | ✅ 85% | Full pipeline operational: `match_chunks` RPC + real embeddings + 5 corpora (65 chunks) + 3 structured documents. *Phase 5 will add citations + confidence-gated retry + numeric sanity checks.* |
+| **Tool Integration** | ❌ 20% | Still 1/3 required tools. Calendar + Email targeted for Phase 6 (Interview Prep app). |
+| **Data Pipeline** | ❌ 15% | Extraction exists; cleanse/verify/export still absent. Phase 6 CV-parsing pipeline addresses this. |
+| **Deployment & Demo** | ✅ 85% | Localhost only. KPI tile row + token-level cost tracking added to dashboard (Phase 1+2). |
+| **Traceability** | ⚠️ 55% | Token-level cost tracking added (Phase 1) — input/output/cached tokens persisted per call. Source citations still pending (Phase 5). |
 
-**Overall**: ~55% — Strong RAG pipeline now fully operational with real embeddings and vector search. Architecture and demo quality remain strong. Significant gaps remain in calendar/email tools and data cleansing pipeline.
+**Overall**: ~58% — Detection + cost-tracking + generic-Kaizen improvements landed. Largest remaining gaps unchanged: Calendar/Email tools and the extract→cleanse→verify pipeline (both targeted by Phase 6).
 
 ---
 

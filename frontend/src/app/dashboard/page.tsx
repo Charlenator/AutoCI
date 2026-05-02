@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { connectSSE, SSEEvent } from "@/lib/sse";
+import { connectSSE, SSEEvent, PhaseWriteup } from "@/lib/sse";
 
 /* ─── Types ─── */
 interface Message {
@@ -20,6 +20,32 @@ interface StepEntry {
   progress: number;
   total: number;
   timestamp: number;
+}
+
+interface KPITile {
+  kpi: string;
+  label: string;
+  unit: string;
+  value: number;
+  target: number | null;
+  benchmark: number | null;
+  status: "green" | "amber" | "red" | "unknown";
+  delta_pct: number;
+  primary_target: number | null;
+  direction: "lower_better" | "higher_better";
+}
+
+const KPI_STATUS_COLOR: Record<string, string> = {
+  green: "#10b981",
+  amber: "#f59e0b",
+  red: "#ef4444",
+  unknown: "#94a3b8",
+};
+
+function formatKPI(value: number, unit: string): string {
+  if (unit === "ratio") return `${(value * 100).toFixed(1)}%`;
+  if (unit === "days") return `${value.toFixed(1)} d`;
+  return String(value);
 }
 
 /* ─── Phase config ─── */
@@ -60,6 +86,7 @@ export default function Dashboard() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [cost, setCost] = useState(0);
+  const [tokens, setTokens] = useState<{ input: number; output: number; cached: number }>({ input: 0, output: 0, cached: 0 });
   const [phaseStatus, setPhaseStatus] = useState<Record<Phase, "idle" | "active" | "complete">>({
     detection: "idle", define: "idle", measure: "idle",
     analyse: "idle", improve: "idle", control: "idle",
@@ -73,6 +100,30 @@ export default function Dashboard() {
   const [knowledgeStatus, setKnowledgeStatus] = useState<"idle" | "fetching" | "done">("idle");
   const [knowledgeSummary, setKnowledgeSummary] = useState<string | null>(null);
   const [seedStatus, setSeedStatus] = useState<"idle" | "seeding" | "done">("idle");
+  const [kpis, setKpis] = useState<KPITile[]>([]);
+  const [kpiRoleTitle] = useState("Senior Java Developer");
+
+  // Phase 4: per-phase writeups + HITL gate state
+  const [writeups, setWriteups] = useState<Partial<Record<Phase, PhaseWriteup>>>({});
+  const [pendingHITLPhase, setPendingHITLPhase] = useState<Phase | null>(null);
+  const [hitlSecondsLeft, setHitlSecondsLeft] = useState(30);
+  const [askDraft, setAskDraft] = useState("");
+  const [askMode, setAskMode] = useState(false);
+
+  // Fetch KPI snapshot from /metrics/kpis
+  const refreshKPIs = useCallback(async () => {
+    try {
+      const r = await fetch(`${API_BASE}/metrics/kpis?role_title=${encodeURIComponent(kpiRoleTitle)}`);
+      const d = await r.json();
+      if (Array.isArray(d.kpis)) setKpis(d.kpis);
+    } catch {
+      /* swallow — tiles just stay empty */
+    }
+  }, [kpiRoleTitle]);
+
+  useEffect(() => {
+    refreshKPIs();
+  }, [refreshKPIs]);
   const timelineRef = useRef<HTMLDivElement>(null);
   const sseRef = useRef<EventSource | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -100,6 +151,38 @@ export default function Dashboard() {
   useEffect(() => {
     return () => sseRef.current?.close();
   }, []);
+
+  // 2026-05-02: countdown removed — manual advance only. The 30s timer was
+  // racing the "Ask" path (user submits a question, timer expires before the
+  // answer streams back). Backend's HITL_TIMEOUT is now effectively infinite.
+  // Re-enable here if/when we want a real timeout.
+
+  // POST /sessions/:id/respond — feeds the orchestrator's HITL queue.
+  const respondToHITL = useCallback(
+    async (decision: "advance" | "ask" | "abort", message?: string) => {
+      if (!sessionId) return;
+      try {
+        await fetch(`${API_BASE}/sessions/${sessionId}/respond`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ decision, message }),
+        });
+        if (decision === "advance" || decision === "abort") {
+          setPendingHITLPhase(null);
+          setAskMode(false);
+          setAskDraft("");
+        } else if (decision === "ask") {
+          // Stay paused — the user can advance after seeing the answer.
+          setAskMode(false);
+          setAskDraft("");
+        }
+      } catch (err: any) {
+        setMessages((prev) => [...prev, { role: "system", content: `❌ HITL error: ${err.message}` }]);
+      }
+    },
+    [sessionId]
+  );
+
 
   // Handle incoming SSE events
   const handleSSEEvent = useCallback((event: SSEEvent) => {
@@ -167,23 +250,47 @@ export default function Dashboard() {
 
       case "cost":
         setCost(event.total_usd);
+        setTokens({
+          input: event.input_tokens ?? 0,
+          output: event.output_tokens ?? 0,
+          cached: event.cached_tokens ?? 0,
+        });
+        // Kaizen finished — KPIs may have moved (e.g. new hires committed) and any
+        // pending HITL gate is moot.
+        setPendingHITLPhase(null);
+        refreshKPIs();
         break;
+
+      case "phase_writeup": {
+        const phase = event.phase as Phase;
+        setWriteups((prev) => ({ ...prev, [phase]: event.writeup }));
+        // Control is the final phase — no HITL gate, just show the writeup.
+        if (phase !== "control") {
+          setPendingHITLPhase(phase);
+          setHitlSecondsLeft(30);
+          setAskMode(false);
+        }
+        break;
+      }
 
       case "connected":
         setMessages((prev) => [...prev, { role: "system", content: `🔗 Connected to session: ${event.session_id.substring(0, 8)}...` }]);
         break;
     }
-  }, []);
+  }, [refreshKPIs]);
 
   // Run Kaizen
   const runKaizen = useCallback(async () => {
     if (isRunning) return;
     setIsRunning(true);
     setCost(0);
+    setTokens({ input: 0, output: 0, cached: 0 });
     setPhaseStatus({ detection: "idle", define: "idle", measure: "idle", analyse: "idle", improve: "idle", control: "idle" });
     setPhaseOutputs({ detection: [], define: [], measure: [], analyse: [], improve: [], control: [] });
     setStepLog([]);
     setCurrentPhase(null);
+    setWriteups({});
+    setPendingHITLPhase(null);
 
     try {
       sseRef.current?.close();
@@ -207,14 +314,46 @@ export default function Dashboard() {
     }
   }, [isRunning, handleSSEEvent]);
 
-  // Send chat message
-  const sendMessage = useCallback(async () => {
-    if (!chatInput.trim() || !sessionId) {
-      if (!sessionId) {
-        setMessages((prev) => [...prev, { role: "assistant", content: "Please click **Run Kaizen** first to start a session." }]);
+  // Fire one of the suggested generic-Kaizen briefs via /trigger/manual.
+  const runSuggestedKaizen = useCallback(
+    async (brief: string, roleTitle?: string) => {
+      if (isRunning) return;
+      setIsRunning(true);
+      setCost(0);
+      setTokens({ input: 0, output: 0, cached: 0 });
+      setPhaseStatus({ detection: "idle", define: "idle", measure: "idle", analyse: "idle", improve: "idle", control: "idle" });
+      setPhaseOutputs({ detection: [], define: [], measure: [], analyse: [], improve: [], control: [] });
+      setStepLog([]);
+      setCurrentPhase(null);
+      setWriteups({});
+      setPendingHITLPhase(null);
+
+      try {
+        sseRef.current?.close();
+        const resp = await fetch(`${API_BASE}/trigger/manual`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role_title: roleTitle ?? null, problem_brief: brief }),
+        });
+        const data = await resp.json();
+        const sid = data.session_id;
+        setSessionId(sid);
+        const source = connectSSE(sid, API_BASE, handleSSEEvent);
+        sseRef.current = source;
+        setMessages((prev) => [...prev, { role: "user", content: brief }]);
+        setMessages((prev) => [...prev, { role: "assistant", content: `🎯 Investigating: "${brief}" ${roleTitle ? `(${roleTitle})` : ""}` }]);
+      } catch (err: any) {
+        setMessages((prev) => [...prev, { role: "assistant", content: `❌ Error: ${err.message}` }]);
+      } finally {
+        setIsRunning(false);
       }
-      return;
-    }
+    },
+    [isRunning, handleSSEEvent]
+  );
+
+  // Send chat message — works with or without an active Kaizen session.
+  const sendMessage = useCallback(async () => {
+    if (!chatInput.trim()) return;
     const text = chatInput.trim();
     setChatInput("");
     setMessages((prev) => [...prev, { role: "user", content: text }]);
@@ -231,6 +370,15 @@ export default function Dashboard() {
       setMessages((prev) => [...prev, { role: "assistant", content: `❌ Error: ${err.message}` }]);
     }
   }, [chatInput, sessionId]);
+
+  // Send the typed chat input as a custom Kaizen brief — fires /trigger/manual
+  // and switches the SSE stream to the new session.
+  const launchCustomKaizen = useCallback(async () => {
+    const brief = chatInput.trim();
+    if (!brief) return;
+    setChatInput("");
+    await runSuggestedKaizen(brief, undefined);
+  }, [chatInput, runSuggestedKaizen]);
 
   // Seed RAG Corpus (pre-fill with DMAIC docs, benchmarks, case studies)
   const seedRag = useCallback(async () => {
@@ -300,7 +448,10 @@ export default function Dashboard() {
       <div style={{ width: 300, borderRight: "1px solid #e2e8f0", display: "flex", flexDirection: "column", background: "#fff", flexShrink: 0 }}>
         <div style={{ padding: "10px 14px", borderBottom: "1px solid #e2e8f0", fontWeight: 600, fontSize: 13, color: "#1e293b", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span>💬 Chat</span>
-          <span style={{ fontSize: 11, color: "#64748b", fontFamily: "monospace" }}>${cost.toFixed(6)}</span>
+          <span
+            style={{ fontSize: 11, color: "#64748b", fontFamily: "monospace", cursor: "help" }}
+            title={`USD $${cost.toFixed(6)}\nInput tokens: ${tokens.input.toLocaleString()}\nOutput tokens: ${tokens.output.toLocaleString()}${tokens.cached > 0 ? `\nCached tokens: ${tokens.cached.toLocaleString()}` : ""}`}
+          >${cost.toFixed(6)}</span>
         </div>
 
         {/* Activity Log */}
@@ -336,16 +487,65 @@ export default function Dashboard() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Chat input */}
-        <div style={{ padding: 8, borderTop: "1px solid #e2e8f0", display: "flex", gap: 6 }}>
+        {/* Suggested generic Kaizens — one click fires /trigger/manual with the brief */}
+        <div style={{ padding: "6px 8px 0 8px", borderTop: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: 4 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", color: "#64748b" }}>🎯 Investigate</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+            {[
+              { label: "UX offer drop", brief: "why is offer acceptance so low for UX hires", role: "UX Designer" },
+              { label: "Java conv ⤓", brief: "why is the Applied→Hire conversion rate so low for Senior Java Developers", role: "Senior Java Developer" },
+              { label: "Data Eng funnel", brief: "where do Data Engineer candidates drop off in the pipeline", role: "Data Engineer" },
+              { label: "Source mix", brief: "are referrals genuinely yielding more hires than agencies, or is the data lying to us", role: undefined },
+              { label: "PM scheduling lag", brief: "is interviewer scheduling lag the bottleneck for PM hires", role: "Product Manager" },
+            ].map((s) => (
+              <button
+                key={s.label}
+                onClick={() => runSuggestedKaizen(s.brief, s.role)}
+                disabled={isRunning}
+                title={s.brief}
+                style={{
+                  fontSize: 10,
+                  padding: "3px 7px",
+                  borderRadius: 10,
+                  border: "1px solid #cbd5e1",
+                  background: isRunning ? "#f1f5f9" : "#fff",
+                  color: isRunning ? "#94a3b8" : "#475569",
+                  cursor: isRunning ? "not-allowed" : "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Chat input — Send asks via /chat/query (no session needed); 🎯 fires the
+            text as a custom Kaizen brief via /trigger/manual. */}
+        <div style={{ padding: 8, borderTop: "1px solid #e2e8f0", display: "flex", gap: 4 }}>
           <input
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-            placeholder="Ask about the pipeline..."
+            placeholder="Ask about the pipeline, or type a brief and hit 🎯..."
             style={{ flex: 1, padding: "6px 10px", borderRadius: 4, border: "1px solid #cbd5e1", fontSize: 12, outline: "none" }}
           />
-          <button onClick={sendMessage} style={{ padding: "6px 12px", borderRadius: 4, border: "none", background: "#2563eb", color: "#fff", fontSize: 12, cursor: "pointer" }}>Send</button>
+          <button
+            onClick={sendMessage}
+            disabled={!chatInput.trim()}
+            title="Send as a chat question (no Kaizen)"
+            style={{ padding: "6px 10px", borderRadius: 4, border: "none", background: chatInput.trim() ? "#2563eb" : "#cbd5e1", color: "#fff", fontSize: 12, cursor: chatInput.trim() ? "pointer" : "not-allowed" }}
+          >
+            Send
+          </button>
+          <button
+            onClick={launchCustomKaizen}
+            disabled={!chatInput.trim() || isRunning}
+            title="Launch a custom Kaizen using this text as the problem brief"
+            style={{ padding: "6px 10px", borderRadius: 4, border: "none", background: !chatInput.trim() || isRunning ? "#cbd5e1" : "#7c3aed", color: "#fff", fontSize: 12, cursor: !chatInput.trim() || isRunning ? "not-allowed" : "pointer" }}
+          >
+            🎯
+          </button>
         </div>
 
         {/* Seed RAG Corpus button */}
@@ -450,8 +650,54 @@ export default function Dashboard() {
               </span>
             )}
           </div>
-          <span style={{ fontFamily: "monospace", fontSize: 11 }}>${cost.toFixed(6)}</span>
+          <span
+            style={{ fontFamily: "monospace", fontSize: 11, cursor: "help" }}
+            title={`USD $${cost.toFixed(6)}\nInput tokens: ${tokens.input.toLocaleString()}\nOutput tokens: ${tokens.output.toLocaleString()}${tokens.cached > 0 ? `\nCached tokens: ${tokens.cached.toLocaleString()}` : ""}`}
+          >${cost.toFixed(6)}</span>
         </div>
+
+        {/* KPI tile row — 3 KPIs vs target, traffic-light status */}
+        {kpis.length > 0 && (
+          <div style={{ display: "flex", gap: 12, padding: "12px 16px", background: "#fff", borderBottom: "1px solid #e2e8f0" }}>
+            {kpis.map((tile) => {
+              const color = KPI_STATUS_COLOR[tile.status] || KPI_STATUS_COLOR.unknown;
+              const targetLabel = tile.primary_target !== null
+                ? `Target: ${formatKPI(tile.primary_target, tile.unit)}`
+                : "No target set";
+              const benchLabel = tile.benchmark !== null
+                ? `Benchmark: ${formatKPI(tile.benchmark, tile.unit)}`
+                : null;
+              return (
+                <div
+                  key={tile.kpi}
+                  title={`${tile.label}\n${targetLabel}${benchLabel ? `\n${benchLabel}` : ""}\nDelta: ${tile.delta_pct >= 0 ? "+" : ""}${tile.delta_pct.toFixed(1)}% vs target`}
+                  style={{
+                    flex: 1,
+                    padding: "10px 14px",
+                    border: `1px solid ${color}`,
+                    borderLeft: `4px solid ${color}`,
+                    borderRadius: 6,
+                    background: "#f8fafc",
+                    cursor: "help",
+                  }}
+                >
+                  <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: 0.4 }}>{tile.label}</div>
+                  <div style={{ fontSize: 22, fontWeight: 600, color: "#0f172a", marginTop: 2 }}>
+                    {formatKPI(tile.value, tile.unit)}
+                  </div>
+                  <div style={{ fontSize: 11, color, marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, display: "inline-block" }} />
+                    <span>
+                      {tile.primary_target !== null
+                        ? `${tile.delta_pct >= 0 ? "+" : ""}${tile.delta_pct.toFixed(1)}% vs target`
+                        : "no target"}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Scrollable timeline */}
         <div ref={timelineRef} style={{ flex: 1, overflowY: "auto", padding: "12px 16px" }}>
@@ -544,6 +790,185 @@ export default function Dashboard() {
                 {outputs.length === 0 && isIdle && (
                   <div style={{ padding: "10px 14px", color: "#94a3b8", fontSize: 12, fontStyle: "italic" }}>
                     Awaiting previous phase...
+                  </div>
+                )}
+
+                {/* Phase writeup card — Amazon-narrative summary AFTER the technical
+                    agent output, since the writeup synthesises what the agents found. */}
+                {writeups[phase] && (
+                  <div style={{
+                    margin: "10px 14px 14px",
+                    padding: "14px 16px",
+                    borderRadius: 6,
+                    background: pendingHITLPhase === phase ? "#fef3c7" : "#f8fafc",
+                    border: `1px solid ${pendingHITLPhase === phase ? "#f59e0b" : "#cbd5e1"}`,
+                    boxShadow: pendingHITLPhase === phase ? "0 0 0 2px rgba(245,158,11,0.20)" : "none",
+                  }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.6, color: "#64748b", marginBottom: 4 }}>
+                      📝 Phase Writeup
+                    </div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a", lineHeight: 1.3, marginBottom: 6 }}>
+                      {writeups[phase]!.headline}
+                    </div>
+                    <div style={{ fontSize: 12, fontStyle: "italic", color: "#334155", marginBottom: 8 }}>
+                      {writeups[phase]!.tl_dr}
+                    </div>
+                    {writeups[phase]!.key_findings.length > 0 && (
+                      <div style={{ marginBottom: 8 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", color: "#64748b", marginBottom: 2 }}>Key findings</div>
+                        <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: "#1e293b" }}>
+                          {writeups[phase]!.key_findings.map((kf, i) => (
+                            <li key={i} style={{ marginBottom: 2 }}>{kf}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {writeups[phase]!.hypothesis && (
+                      <div style={{ marginBottom: 8, fontSize: 12, color: "#1e293b" }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", color: "#64748b", marginRight: 6 }}>Hypothesis</span>
+                        {writeups[phase]!.hypothesis}
+                      </div>
+                    )}
+                    {writeups[phase]!.evidence_citations.length > 0 && (
+                      <div style={{ marginBottom: 8, display: "flex", flexWrap: "wrap", gap: 4 }}>
+                        {writeups[phase]!.evidence_citations.map((c, i) => (
+                          <span
+                            key={i}
+                            title={`${c.source}:${c.id}\n${c.snippet}`}
+                            style={{
+                              fontSize: 10,
+                              padding: "2px 6px",
+                              borderRadius: 10,
+                              background: AGENT_COLORS[c.id] || "#94a3b8",
+                              color: "#fff",
+                              fontWeight: 600,
+                              cursor: "help",
+                            }}
+                          >
+                            [{i + 1}] {c.id}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{ fontSize: 12, color: "#1e293b" }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", color: "#64748b", marginRight: 6 }}>Next step</span>
+                      {writeups[phase]!.next_step}
+                    </div>
+                    {writeups[phase]!.open_questions.length > 0 && (
+                      <div style={{ marginTop: 10 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", color: "#64748b", marginBottom: 4 }}>
+                          Open questions — click one to ask
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          {writeups[phase]!.open_questions.map((q, i) => (
+                            <button
+                              key={i}
+                              onClick={() => {
+                                if (pendingHITLPhase === phase) {
+                                  setAskMode(true);
+                                  setAskDraft(q);
+                                } else {
+                                  // Phase already past its HITL gate — fall back to /chat/query
+                                  setChatInput(q);
+                                }
+                              }}
+                              title={pendingHITLPhase === phase ? "Pre-fill the Ask box with this question" : "Pre-fill the chat box with this question"}
+                              style={{
+                                textAlign: "left",
+                                fontSize: 11,
+                                padding: "5px 8px",
+                                borderRadius: 4,
+                                border: "1px dashed #cbd5e1",
+                                background: "#fff",
+                                color: "#475569",
+                                cursor: "pointer",
+                              }}
+                            >
+                              💬 {q}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* HITL controls — visible while THIS phase is the pending gate. */}
+                    {pendingHITLPhase === phase && (
+                      <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px dashed #cbd5e1" }}>
+                        {!askMode ? (
+                          <>
+                            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#92400e", marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                              <span>⚡ Your call</span>
+                              <span style={{ fontFamily: "monospace", fontSize: 11, color: "#64748b" }}>manual advance</span>
+                            </div>
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                              <button
+                                onClick={() => respondToHITL("advance")}
+                                style={{ padding: "8px 14px", borderRadius: 4, border: "none", background: "#10b981", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                              >
+                                ✅ Advance
+                              </button>
+                              <button
+                                onClick={() => setAskMode(true)}
+                                style={{ padding: "8px 14px", borderRadius: 4, border: "1px solid #94a3b8", background: "#fff", color: "#1e293b", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                              >
+                                💬 Ask a question
+                              </button>
+                              <button
+                                onClick={() => respondToHITL("abort")}
+                                style={{ padding: "8px 14px", borderRadius: 4, border: "none", background: "#dc2626", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                              >
+                                🛑 Abort
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <div>
+                            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#1e293b", marginBottom: 6 }}>
+                              💬 Ask the chat agent — your answer streams into this phase
+                            </div>
+                            <textarea
+                              value={askDraft}
+                              onChange={(e) => setAskDraft(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && !e.shiftKey && askDraft.trim()) {
+                                  e.preventDefault();
+                                  respondToHITL("ask", askDraft.trim());
+                                }
+                              }}
+                              placeholder="Type your question (Enter to send, Shift+Enter for newline)…"
+                              rows={2}
+                              style={{
+                                display: "block",
+                                width: "100%",
+                                boxSizing: "border-box",
+                                padding: "8px 10px",
+                                borderRadius: 4,
+                                border: "1px solid #94a3b8",
+                                fontSize: 12,
+                                outline: "none",
+                                resize: "vertical",
+                                fontFamily: "inherit",
+                              }}
+                            />
+                            <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                              <button
+                                onClick={() => askDraft.trim() && respondToHITL("ask", askDraft.trim())}
+                                disabled={!askDraft.trim()}
+                                style={{ padding: "8px 14px", borderRadius: 4, border: "none", background: askDraft.trim() ? "#2563eb" : "#cbd5e1", color: "#fff", fontSize: 12, fontWeight: 600, cursor: askDraft.trim() ? "pointer" : "not-allowed" }}
+                              >
+                                Send question
+                              </button>
+                              <button
+                                onClick={() => { setAskMode(false); setAskDraft(""); }}
+                                style={{ padding: "8px 14px", borderRadius: 4, border: "1px solid #94a3b8", background: "#fff", color: "#1e293b", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                              >
+                                ← Back
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

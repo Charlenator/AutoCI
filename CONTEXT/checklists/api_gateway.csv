@@ -1,2 +1,0 @@
-API gateway (A1, A2, A3 SSE, A4, A5)
-Test: curl /trigger/manual, EventSource on /sessions/:id/stream receives node events

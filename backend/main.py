@@ -7,7 +7,7 @@ from supabase import create_client
 from api.tools.t3_litellm_router import LiteLLMRouter
 from api.workflows.o2_meta_orchestrator import MetaOrchestrator
 from api.tools.t4_embeddings import EmbeddingService
-from api.routes import trigger, stream, chat, metrics, rag, knowledge
+from api.routes import trigger, stream, chat, metrics, rag, knowledge, sessions
 from api.routes.knowledge import seed_rag_corpus
 
 load_dotenv()
@@ -65,6 +65,7 @@ async def inject_deps(request, call_next):
 
 app.include_router(trigger.router, prefix="/trigger", tags=["Trigger"])
 app.include_router(stream.router, prefix="/sessions", tags=["SSE"])
+app.include_router(sessions.router, prefix="/sessions", tags=["HITL"])
 app.include_router(chat.router, prefix="/chat", tags=["Chat"])
 app.include_router(metrics.router, prefix="/metrics", tags=["Metrics"])
 app.include_router(rag.router, prefix="/rag", tags=["RAG"])
