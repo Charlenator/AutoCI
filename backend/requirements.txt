@@ -1,0 +1,14 @@
+# AutoCI Backend Dependencies
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+httpx
+supabase
+litellm
+numpy
+python-dotenv
+sse-starlette
+apscheduler
+openai
+python-multipart

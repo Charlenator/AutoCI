@@ -1,0 +1,477 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2026-04-29T01:30:00.000Z" agent="Mozilla/5.0" version="24.7.6" etag="auto-ci">
+  <diagram id="auto-ci-arch" name="AutoCI Architecture">
+    <mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- ==================== STYLES ==================== -->
+
+        <mxCell id="styles" style="swimlane;whiteSpace=wrap;html=1;rounded=1;" parent="1" connectable="0" />
+
+        <!-- Swimlane: Frontend -->
+        <mxCell id="lane-frontend" value="Frontend (Next.js / Vercel)" parent="1" style="swimlane;startSize=30;horizontal=1;rounded=1;fillColor=#E3F2FD;strokeColor=#1565C0;swimlaneFillColor=#E3F2FD;fontStyle=1;fontSize=14;" vertex="1">
+          <mxGeometry x="40" y="40" width="280" height="760" as="geometry" />
+        </mxCell>
+
+        <!-- Swimlane: API Gateway -->
+        <mxCell id="lane-api" value="API Gateway (FastAPI / Modal)" parent="1" style="swimlane;startSize=30;horizontal=1;rounded=1;fillColor=#FFF3E0;strokeColor=#E65100;swimlaneFillColor=#FFF3E0;fontStyle=1;fontSize=14;" vertex="1">
+          <mxGeometry x="360" y="40" width="260" height="760" as="geometry" />
+        </mxCell>
+
+        <!-- Swimlane: Agents & Orchestration -->
+        <mxCell id="lane-agents" value="Agents & Orchestration (Python)" parent="1" style="swimlane;startSize=30;horizontal=1;rounded=1;fillColor=#F3E5F5;strokeColor=#7B1FA2;swimlaneFillColor=#F3E5F5;fontStyle=1;fontSize=14;" vertex="1">
+          <mxGeometry x="660" y="40" width="380" height="760" as="geometry" />
+        </mxCell>
+
+        <!-- Swimlane: Data & External -->
+        <mxCell id="lane-data" value="Data Layer & External APIs" parent="1" style="swimlane;startSize=30;horizontal=1;rounded=1;fillColor=#E8F5E9;strokeColor=#2E7D32;swimlaneFillColor=#E8F5E9;fontStyle=1;fontSize=14;" vertex="1">
+          <mxGeometry x="1080" y="40" width="460" height="760" as="geometry" />
+        </mxCell>
+
+        <!-- ==================== FRONTEND NODES ==================== -->
+
+        <!-- F2 Chat Panel -->
+        <mxCell id="f2" value="F2 — Chat Panel<br><font style="font-size:10px">Left sidebar: queries + SSE stream</font>" parent="lane-frontend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1565C0;fontColor=#FFF;strokeColor=#0D47A1;fontSize=11;arcSize=6;" vertex="1">
+          <mxGeometry x="15" y="50" width="250" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- F3 Timeline -->
+        <mxCell id="f3" value="F3 — Results Timeline<br><font style="font-size:10px">Centre: phase-by-phase output</font>" parent="lane-frontend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1565C0;fontColor=#FFF;strokeColor=#0D47A1;fontSize=11;arcSize=6;" vertex="1">
+          <mxGeometry x="15" y="110" width="250" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- F4 Activity Log -->
+        <mxCell id="f4" value="F4 — Activity Log<br><font style="font-size:10px">Real-time step_progress events</font>" parent="lane-frontend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1565C0;fontColor=#FFF;strokeColor=#0D47A1;fontSize=11;arcSize=6;" vertex="1">
+          <mxGeometry x="15" y="170" width="250" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- F5 Cost Ticker -->
+        <mxCell id="f5" value="F5 — Cost Ticker<br><font style="font-size:10px">Per-session LLM spend</font>" parent="lane-frontend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1565C0;fontColor=#FFF;strokeColor=#0D47A1;fontSize=11;arcSize=6;" vertex="1">
+          <mxGeometry x="15" y="230" width="250" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- F6 Run Kaizen -->
+        <mxCell id="f6" value="F6 — Run Kaizen Button<br><font style="font-size:10px">Triggers goal-review POST</font>" parent="lane-frontend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1565C0;fontColor=#FFF;strokeColor=#0D47A1;fontSize=11;arcSize=6;" vertex="1">
+          <mxGeometry x="15" y="290" width="250" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- F7 Seed RAG -->
+        <mxCell id="f7" value="F7 — Seed RAG Button<br><font style="font-size:10px">POST /knowledge/seed</font>" parent="lane-frontend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1565C0;fontColor=#FFF;strokeColor=#0D47A1;fontSize=11;arcSize=6;" vertex="1">
+          <mxGeometry x="15" y="350" width="250" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- F8 Update Knowledge -->
+        <mxCell id="f8" value="F8 — Update Knowledge Button<br><font style="font-size:10px">POST /knowledge/update</font>" parent="lane-frontend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1565C0;fontColor=#FFF;strokeColor=#0D47A1;fontSize=11;arcSize=6;" vertex="1">
+          <mxGeometry x="15" y="410" width="250" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- F9 SSE Client -->
+        <mxCell id="f9" value="F9 — SSE Client<br><font style="font-size:10px">EventSource per session</font>" parent="lane-frontend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1565C0;fontColor=#FFF;strokeColor=#0D47A1;fontSize=11;arcSize=6;" vertex="1">
+          <mxGeometry x="15" y="470" width="250" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- F10 System Diagram -->
+        <mxCell id="f10" value="F10 — System Diagram Page<br><font style="font-size:10px">/system-diagram route</font>" parent="lane-frontend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1565C0;fontColor=#FFF;strokeColor=#0D47A1;fontSize=11;arcSize=6;" vertex="1">
+          <mxGeometry x="15" y="530" width="250" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- ==================== API GATEWAY NODES ==================== -->
+
+        <!-- A1 Trigger Manual -->
+        <mxCell id="a1" value="A1 — POST /trigger/manual" parent="lane-api" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E65100;fontColor=#FFF;strokeColor=#BF360C;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="15" y="50" width="230" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- A2 Goal Review -->
+        <mxCell id="a2" value="A2 — POST /trigger/goal-review" parent="lane-api" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E65100;fontColor=#FFF;strokeColor=#BF360C;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="15" y="100" width="230" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- A3 SSE Stream -->
+        <mxCell id="a3" value="A3 — GET /sessions/:id/stream" parent="lane-api" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E65100;fontColor=#FFF;strokeColor=#BF360C;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="15" y="150" width="230" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- A4 Chat Query -->
+        <mxCell id="a4" value="A4 — POST /chat/query" parent="lane-api" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E65100;fontColor=#FFF;strokeColor=#BF360C;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="15" y="200" width="230" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- A5 Metrics -->
+        <mxCell id="a5" value="A5 — GET /metrics/cost" parent="lane-api" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E65100;fontColor=#FFF;strokeColor=#BF360C;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="15" y="250" width="230" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- A6 RAG Ingest -->
+        <mxCell id="a6" value="A6 — POST /rag/ingest" parent="lane-api" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E65100;fontColor=#FFF;strokeColor=#BF360C;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="15" y="300" width="230" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- A7 Knowledge Seed -->
+        <mxCell id="a7" value="A7 — POST /knowledge/seed" parent="lane-api" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E65100;fontColor=#FFF;strokeColor=#BF360C;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="15" y="350" width="230" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- A8 Knowledge Update -->
+        <mxCell id="a8" value="A8 — POST /knowledge/update" parent="lane-api" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E65100;fontColor=#FFF;strokeColor=#BF360C;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="15" y="400" width="230" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- A9 Health -->
+        <mxCell id="a9" value="A9 — GET /health" parent="lane-api" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E65100;fontColor=#FFF;strokeColor=#BF360C;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="15" y="450" width="230" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ==================== AGENTS & ORCHESTRATION NODES ==================== -->
+
+        <!-- O2 Meta-Orchestrator -->
+        <mxCell id="o2" value="O2 — Meta-Orchestrator<br><font style="font-size:9px">Runs full Kaizen lifecycle</font>" parent="lane-agents" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#7B1FA2;fontColor=#FFF;strokeColor=#4A148C;fontSize=11;arcSize=6;" vertex="1">
+          <mxGeometry x="15" y="40" width="350" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- O3 Phase Gate -->
+        <mxCell id="o3" value="O3 — Phase-Gate Enforcer<br><font style="font-size:9px">Prevents skipping phases</font>" parent="lane-agents" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#7B1FA2;fontColor=#FFF;strokeColor=#4A148C;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="15" y="90" width="350" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Detection Layer heading -->
+        <mxCell id="det-heading" value="▸ DETECTION LAYER" parent="lane-agents" style="text;html=1;fontSize=11;fontStyle=1;fillColor=none;verticalAlign=bottom;align=left;fontColor=#4A148C;" vertex="1">
+          <mxGeometry x="10" y="135" width="120" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- D1 -->
+        <mxCell id="d1" value="D1 — Internal Benchmarking<br><font style="font-size:9px">TTF, conversion rates, source yields</font>" parent="lane-agents" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#3F51B5;fontColor=#FFF;strokeColor=#303F9F;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="15" y="155" width="170" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- D2 -->
+        <mxCell id="d2" value="D2 — External Benchmarking<br><font style="font-size:9px">Industry comparison via Adzuna</font>" parent="lane-agents" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#3F51B5;fontColor=#FFF;strokeColor=#303F9F;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="195" y="155" width="170" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- D3 -->
+        <mxCell id="d3" value="D3 — Gap Analysis<br><font style="font-size:9px">Delta computation + severity</font>" parent="lane-agents" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#3F51B5;fontColor=#FFF;strokeColor=#303F9F;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="15" y="200" width="170" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- S4 Research -->
+        <mxCell id="s4" value="S4 — Research Agent<br><font style="font-size:9px">Tavily + NewsAPI + Adzuna</font>" parent="lane-agents" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#9C27B0;fontColor=#FFF;strokeColor=#6A1B9A;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="195" y="200" width="170" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- Kaizen Engine heading -->
+        <mxCell id="kai-heading" value="▸ KAIZEN ENGINE — DMAIC" parent="lane-agents" style="text;html=1;fontSize=11;fontStyle=1;fillColor=none;verticalAlign=bottom;align=left;fontColor=#4A148C;" vertex="1">
+          <mxGeometry x="10" y="252" width="180" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- K1 Define -->
+        <mxCell id="k1" value="K1 — Define (SIPOC)<br><font style="font-size:9px">Problem scope + financial impact</font>" parent="lane-agents" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#00897B;fontColor=#FFF;strokeColor=#00695C;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="15" y="275" width="170" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- K2 Measure -->
+        <mxCell id="k2" value="K2 — Measure (Metrics)<br><font style="font-size:9px">Baseline KPIs + outliers</font>" parent="lane-agents" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#00897B;fontColor=#FFF;strokeColor=#00695C;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="195" y="275" width="170" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- K3 Analyse Host -->
+        <mxCell id="k3" value="K3 — Analyse (Host)<br><font style="font-size:9px">Spawns K4 + K5</font>" parent="lane-agents" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#00897B;fontColor=#FFF;strokeColor=#00695C;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="15" y="325" width="170" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- K4 Five Whys -->
+        <mxCell id="k4" value="K4 — Five Whys<br><font style="font-size:9px">5 sequential atomic LLM calls</font>" parent="lane-agents" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#00897B;fontColor=#FFF;strokeColor=#00695C;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="195" y="325" width="170" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- K5 Ishikawa -->
+        <mxCell id="k5" value="K5 — Ishikawa Diagram<br><font style="font-size:9px">6 parallel branch calls</font>" parent="lane-agents" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#00897B;fontColor=#FFF;strokeColor=#00695C;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="15" y="375" width="170" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- K6 Improve -->
+        <mxCell id="k6" value="K6 — Improve (Interventions)<br><font style="font-size:9px">Impact/Effort matrix + cards</font>" parent="lane-agents" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#00897B;fontColor=#FFF;strokeColor=#00695C;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="195" y="375" width="170" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- K7 Control -->
+        <mxCell id="k7" value="K7 — Control (Kanban)<br><font style="font-size:9px">30/60/90 day implementation</font>" parent="lane-agents" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#00897B;fontColor=#FFF;strokeColor=#00695C;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="15" y="425" width="350" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- Specialists heading -->
+        <mxCell id="spec-heading" value="▸ SPECIALIST AGENTS" parent="lane-agents" style="text;html=1;fontSize=11;fontStyle=1;fillColor=none;verticalAlign=bottom;align=left;fontColor=#4A148C;" vertex="1">
+          <mxGeometry x="10" y="478" width="140" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- S1 Translation -->
+        <mxCell id="s1" value="S1 — Translation Agent<br><font style="font-size:9px">NL→SQL/RAG intent routing</font>" parent="lane-agents" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FF8F00;fontColor=#FFF;strokeColor=#E65100;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="15" y="500" width="110" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- S2 RAG -->
+        <mxCell id="s2" value="S2 — RAG Agent<br><font style="font-size:9px">pgvector semantic search</font>" parent="lane-agents" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FF8F00;fontColor=#FFF;strokeColor=#E65100;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="135" y="500" width="110" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- S3 SQL -->
+        <mxCell id="s3" value="S3 — SQL Agent<br><font style="font-size:9px">Metrics via T1 Analytics</font>" parent="lane-agents" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FF8F00;fontColor=#FFF;strokeColor=#E65100;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="255" y="500" width="110" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- Tools heading -->
+        <mxCell id="tool-heading" value="▸ TOOLS / MIDDLEWARE" parent="lane-agents" style="text;html=1;fontSize=11;fontStyle=1;fillColor=none;verticalAlign=bottom;align=left;fontColor=#4A148C;" vertex="1">
+          <mxGeometry x="10" y="553" width="160" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- T1 -->
+        <mxCell id="t1" value="T1 — MCP Analytics Library<br><font style="font-size:9px">Recruitment formulas</font>" parent="lane-agents" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#546E7A;fontColor=#FFF;strokeColor=#37474F;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="15" y="575" width="110" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- T2 -->
+        <mxCell id="t2" value="T2 — Validation Interceptor<br><font style="font-size:9px">Schema + rule checks</font>" parent="lane-agents" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#546E7A;fontColor=#FFF;strokeColor=#37474F;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="135" y="575" width="110" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- T3 -->
+        <mxCell id="t3" value="T3 — LiteLLM Router<br><font style="font-size:9px">Cost-aware model routing</font>" parent="lane-agents" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#546E7A;fontColor=#FFF;strokeColor=#37474F;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="255" y="575" width="110" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- T4 -->
+        <mxCell id="t4" value="T4 — Embedding Service<br><font style="font-size:9px">text-embedding-ada-002</font>" parent="lane-agents" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#546E7A;fontColor=#FFF;strokeColor=#37474F;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="15" y="625" width="350" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- O1 DBOS -->
+        <mxCell id="o1" value="O1 — DBOS Durable Workflow (planned)" parent="lane-agents" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#7B1FA2;fontColor=#FFF;strokeColor=#4A148C;fontSize=10;arcSize=6;dashed=1;" vertex="1">
+          <mxGeometry x="15" y="670" width="350" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ==================== DATA & EXTERNAL NODES ==================== -->
+
+        <!-- DB1 Pipeline -->
+        <mxCell id="db1" value="DB1 — Pipeline Schema<br><font style="font-size:9px">roles, candidates, pipeline_events, hires, interviewers, offer_outcomes</font>" parent="lane-data" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2E7D32;fontColor=#FFF;strokeColor=#1B5E20;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="20" y="40" width="200" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- DB2 Kaizen -->
+        <mxCell id="db2" value="DB2 — Kaizen Sessions<br><font style="font-size:9px">kaizen_sessions, kaizen_nodes</font>" parent="lane-data" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2E7D32;fontColor=#FFF;strokeColor=#1B5E20;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="240" y="40" width="200" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- DB3 Cost -->
+        <mxCell id="db3" value="DB3 — Cost Log<br><font style="font-size:9px">agent_invocations</font>" parent="lane-data" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2E7D32;fontColor=#FFF;strokeColor=#1B5E20;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="20" y="105" width="200" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- DB4 Adzuna -->
+        <mxCell id="db4" value="DB4 — External Data<br><font style="font-size:9px">adzuna_postings + benchmarks</font>" parent="lane-data" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2E7D32;fontColor=#FFF;strokeColor=#1B5E20;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="240" y="105" width="200" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- DB5 RAG Corpus -->
+        <mxCell id="db5" value="DB5 — RAG Corpus<br><font style="font-size:9px">corpus_chunks (pgvector 1536d)</font>" parent="lane-data" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2E7D32;fontColor=#FFF;strokeColor=#1B5E20;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="20" y="170" width="420" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- RPC -->
+        <mxCell id="rpc" value="match_chunks RPC<br><font style="font-size:9px">pgvector cosine similarity</font>" parent="lane-data" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#66BB6A;fontColor=#FFF;strokeColor=#43A047;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="20" y="235" width="200" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- External APIs heading -->
+        <mxCell id="ext-heading" value="▸ EXTERNAL APIs" parent="lane-data" style="text;html=1;fontSize=11;fontStyle=1;fillColor=none;verticalAlign=bottom;align=left;fontColor=#1B5E20;" vertex="1">
+          <mxGeometry x="15" y="290" width="120" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- E1 Adzuna -->
+        <mxCell id="e1" value="E1 — Adzuna API<br><font style="font-size:9px">Job postings</font>" parent="lane-data" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#558B2F;fontColor=#FFF;strokeColor=#33691E;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="20" y="315" width="130" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- E2 Tavily -->
+        <mxCell id="e2" value="E2 — Tavily API<br><font style="font-size:9px">Web search</font>" parent="lane-data" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#558B2F;fontColor=#FFF;strokeColor=#33691E;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="165" y="315" width="130" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- E3 NewsAPI -->
+        <mxCell id="e3" value="E3 — NewsAPI<br><font style="font-size:9px">Industry news</font>" parent="lane-data" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#558B2F;fontColor=#FFF;strokeColor=#33691E;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="310" y="315" width="130" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- E4/E5 Calendar/Email -->
+        <mxCell id="e45" value="E4/E5 — Google Calendar / Gmail<br><font style="font-size:9px">(planned — not implemented)</font>" parent="lane-data" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#558B2F;fontColor=#FFF;strokeColor=#33691E;fontSize=10;arcSize=6;dashed=1;" vertex="1">
+          <mxGeometry x="20" y="365" width="420" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- LLM Providers heading -->
+        <mxCell id="llm-heading" value="▸ LLM PROVIDERS" parent="lane-data" style="text;html=1;fontSize=11;fontStyle=1;fillColor=none;verticalAlign=bottom;align=left;fontColor=#1B5E20;" vertex="1">
+          <mxGeometry x="15" y="415" width="120" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- E6 Anthropic -->
+        <mxCell id="e6" value="E6 — Anthropic API<br><font style="font-size:9px">Claude Sonnet 4 + Opus 4</font>" parent="lane-data" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#558B2F;fontColor=#FFF;strokeColor=#33691E;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="20" y="440" width="200" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- E7 DeepSeek -->
+        <mxCell id="e7" value="E7 — DeepSeek API<br><font style="font-size:9px">High-volume parsing</font>" parent="lane-data" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#558B2F;fontColor=#FFF;strokeColor=#33691E;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="240" y="440" width="200" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- E8 OpenAI -->
+        <mxCell id="e8" value="E8 — OpenAI API<br><font style="font-size:9px">text-embedding-ada-002</font>" parent="lane-data" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#558B2F;fontColor=#FFF;strokeColor=#33691E;fontSize=10;arcSize=6;" vertex="1">
+          <mxGeometry x="20" y="490" width="200" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- ==================== EDGES ==================== -->
+
+        <!-- Frontend → API Gateway edges -->
+        <mxCell id="e-f2-a4" value="POST /chat/query" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=9;strokeColor=#1565C0;strokeWidth=1;" edge="1" target="a4" source="f2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-f6-a2" value="click → POST" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=9;strokeColor=#1565C0;strokeWidth=1;" edge="1" target="a2" source="f6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-f9-a3" value="SSE stream" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=9;strokeColor=#1565C0;strokeWidth=1;" edge="1" target="a3" source="f9">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-f7-a7" value="POST /knowledge/seed" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=9;strokeColor=#1565C0;strokeWidth=1;" edge="1" target="a7" source="f7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-f8-a8" value="POST /knowledge/update" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=9;strokeColor=#1565C0;strokeWidth=1;" edge="1" target="a8" source="f8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- API Gateway → Orchestrator -->
+        <mxCell id="e-a2-o2" value="launch Kaizen" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=9;strokeColor=#E65100;strokeWidth=1;" edge="1" target="o2" source="a2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-a4-s1" value="chat query" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=9;strokeColor=#E65100;strokeWidth=1;" edge="1" target="s1" source="a4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Orchestrator → Detection -->
+        <mxCell id="e-o2-d1" value="1. internal bench" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.3;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=8;strokeColor=#7B1FA2;strokeWidth=1;" edge="1" target="d1" source="o2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-d1-d2" value="2. external bench" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=8;strokeColor=#3F51B5;strokeWidth=1;" edge="1" target="d2" source="d1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-d2-s4" value="3. market research" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=8;strokeColor=#9C27B0;strokeWidth=1;" edge="1" target="s4" source="d2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-s4-d3" value="4. gap analysis" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=8;strokeColor=#3F51B5;strokeWidth=1;" edge="1" target="d3" source="s4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Detection → Kaizen Engine -->
+        <mxCell id="e-d3-o3" value="5. phase gate" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.3;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=8;strokeColor=#7B1FA2;strokeWidth=1;" edge="1" target="o3" source="d3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-o3-k1" value="6. Define" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.3;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=8;strokeColor=#7B1FA2;strokeWidth=1;" edge="1" target="k1" source="o3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- DMAIC phase sequence -->
+        <mxCell id="e-k1-k2" value="7. Measure" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=8;strokeColor=#00897B;strokeWidth=1;" edge="1" target="k2" source="k1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-k2-k3" value="8. Analyse" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=8;strokeColor=#00897B;strokeWidth=1;" edge="1" target="k3" source="k2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-k3-k4" value="spawns" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=8;strokeColor=#00897B;strokeWidth=1;dashed=1;" edge="1" target="k4" source="k3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-k3-k5" value="spawns" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.3;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=8;strokeColor=#00897B;strokeWidth=1;dashed=1;" edge="1" target="k5" source="k3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-k4-k6" value="9. Improve" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=8;strokeColor=#00897B;strokeWidth=1;" edge="1" target="k6" source="k4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- K5 joins back to K6→K7 path -->
+        <mxCell id="e-k5-k7" value="synthesis" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.3;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=8;strokeColor=#00897B;strokeWidth=1;dashed=1;" edge="1" target="k7" source="k5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-k6-k7" value="10. Control" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=8;strokeColor=#00897B;strokeWidth=1;" edge="1" target="k7" source="k6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- S1 routing edges -->
+        <mxCell id="e-s1-s2" value="knowledge queries" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=8;strokeColor=#FF8F00;strokeWidth=1;" edge="1" target="s2" source="s1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-s1-s3" value="metrics queries" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=8;strokeColor=#FF8F00;strokeWidth=1;" edge="1" target="s3" source="s2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Tool dependencies -->
+        <mxCell id="e-t1-d1" value="analytics" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;fontSize=8;strokeColor=#546E7A;strokeWidth=1;dashed=1;" edge="1" target="d1" source="t1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-t2-all" value="decorator" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;fontSize=8;strokeColor=#546E7A;strokeWidth=1;dashed=1;" edge="1" target="t2" source="o2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-t3-all" value="model routing" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;fontSize=8;strokeColor=#546E7A;strokeWidth=1;dashed=1;" edge="1" target="t3" source="o2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- S4 → External APIs -->
+        <mxCell id="e-s4-e1" value="job postings" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=8;strokeColor=#9C27B0;strokeWidth=1;" edge="1" target="e1" source="s4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-s4-e2" value="web search" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=8;strokeColor=#9C27B0;strokeWidth=1;" edge="1" target="e2" source="e1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-s4-e3" value="news articles" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=8;strokeColor=#9C27B0;strokeWidth=1;" edge="1" target="e3" source="e2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- T4 → DB5 + RPC → S2 -->
+        <mxCell id="e-t4-db5" value="embed & store" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=8;strokeColor=#546E7A;strokeWidth=1;" edge="1" target="db5" source="t4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-db5-rpc" value="cosine search" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=8;strokeColor=#2E7D32;strokeWidth=1;" edge="1" target="rpc" source="db5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-rpc-s2" value="query results" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=8;strokeColor=#2E7D32;strokeWidth=1;" edge="1" target="s2" source="rpc">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- O2 → DB2 -->
+        <mxCell id="e-o2-db2" value="persist state" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=8;strokeColor=#7B1FA2;strokeWidth=1;" edge="1" target="db2" source="o2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- SSE from orchestrator back to frontend -->
+        <mxCell id="e-o2-f9" value="push_event()" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;fontSize=8;strokeColor=#7B1FA2;strokeWidth=1;dashed=1;" edge="1" target="f9" source="o2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- T3 → LLM providers -->
+        <mxCell id="e-t3-e6" value="Claude" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=8;strokeColor=#546E7A;strokeWidth=1;" edge="1" target="e6" source="t3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-t3-e7" value="DeepSeek" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=8;strokeColor=#546E7A;strokeWidth=1;" edge="1" target="e7" source="e6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-t4-e8" value="embeddings" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=8;strokeColor=#546E7A;strokeWidth=1;" edge="1" target="e8" source="t4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Legend -->
+        <mxCell id="legend" value="" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF;strokeColor=#CCC;fontSize=10;" vertex="1">
+          <mxGeometry x="40" y="820" width="1500" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-text" value="<b>LEGEND</b>&nbsp;&nbsp;│&nbsp;&nbsp;🟦 Frontend (Next.js)&nbsp;&nbsp;│&nbsp;&nbsp;🟧 API Gateway (FastAPI)&nbsp;&nbsp;│&nbsp;&nbsp;🟪 Orchestration&nbsp;&nbsp;│&nbsp;&nbsp;🟦 Detection (Blue)&nbsp;&nbsp;│&nbsp;&nbsp;🟩 Kaizen Engine DMAIC&nbsp;&nbsp;│&nbsp;&nbsp;🟧 Specialist Agents&nbsp;&nbsp;│&nbsp;&nbsp;🟦 Tools&nbsp;&nbsp;│&nbsp;&nbsp;🟩 Data (Supabase)&nbsp;&nbsp;│&nbsp;&nbsp;🟩 External APIs&nbsp;&nbsp;│&nbsp;&nbsp;--&gt; sequential flow&nbsp;&nbsp;│&nbsp;&nbsp;- - -&gt; async/lateral" parent="1" style="text;html=1;fontSize=11;fillColor=none;verticalAlign=middle;align=left;" vertex="1">
+          <mxGeometry x="40" y="820" width="1500" height="60" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

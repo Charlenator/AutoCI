@@ -67,13 +67,13 @@ Every agent invocation is a node in a live React Flow graph. You watch the syste
 
 | Layer | Tool |
 |-------|------|
-| Frontend | Next.js (App Router) on Vercel |
-| Backend | FastAPI on Modal (Docker) |
+| Frontend | Next.js on Vercel |
+| Backend | FastAPI on Modal |
 | Orchestration | DBOS — durable, crash-resumable workflows |
 | Database + Vector | Supabase (Postgres + pgvector) |
 | Embeddings | Supabase Edge Embeddings (text-embedding-3-small) |
 | LLM Interface | LiteLLM — provider-agnostic, hot-swappable |
-| LLMs | Claude Sonnet, Claude Opus (extended thinking), DeepSeek |
+| LLMs | DeepSeek (adjust reasoning on/off depending on task) |
 | Analytics Library | Custom MCP server — hard-coded formulas aligned with data schema eliminates hallucinations in the data analysis layer |
 | Live data | Adzuna API, Tavily, NewsAPI, Google Calendar, Gmail |
 
@@ -86,13 +86,13 @@ Every agent invocation is a node in a live React Flow graph. You watch the syste
 - Python 3.11+
 - Supabase project with `vector` extension enabled
 - Modal account
-- API keys: Anthropic, DeepSeek, Adzuna, Tavily, NewsAPI, Google Cloud (OAuth)
+- API keys: DeepSeek, Adzuna, Tavily, NewsAPI, Google Cloud (OAuth)
 
 ### Setup
 
 ```bash
 # Clone
-git clone https://github.com/your-username/autoci.git
+git clone https://github.com/Charlenator/autoci.git
 cd autoci
 
 # Frontend

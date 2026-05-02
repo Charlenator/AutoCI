@@ -1,0 +1,18 @@
+I need to complete this project. Please read the docs in the CONTEXT folder for more info. We need to align with the project requirements, and go above and beyond where reasonable. Here are the changes I would like to implement:
+
+1. Clean up and update files in CONTEXT folder.
+2. Add proper LLM API call cost tracking if data is readily available. 
+3. Enhance the “Detection (Benchmarking)” step to measure 3 different KPIs. Seed mockup tables with “raw” data to simulate realistic KPIs.
+4. Update UI:
+4.1 landing page should be the RAG chatbot - RAG data includes all available tables on supabase, as well as new news/jobs data (on relevant query, trigger relevant APIs store results to vector db, include in output if relevant. Chatbot also needs a translation layer that can utilize the hardcoded formulas and/or generate new Sql to retrieve relevant answers. Self-checking for accuracy. User should be able to ask questions about candidates, roles, metrics, calendar, emails and get a relevant response with references. 
+4.2 Show the 3 measured KPIs and each's performance against goal. 
+4.3. The Kaizen should be more universal. Can be triggered either for a specific KPI, or for a general issue supplied by the user. 
+4.4. Each step should be concluded with a user-friendly writeup of the key findings (with references), hypothesis, and next step(s). And give the opportunity for human input before proceeding to the next step. This is also where the bot can ask for additional data/input if needed. The writeup should be non-tech user friendly. Keep more technical logs for the diagram view (see point 5 below)
+5. Merge UI into single page, but with toggles for different components. Default view is the Chatbot UI (classic AI chat interface). Next to it, is the system diagram (react flow). Whenever a rag tool, mcp, api etc. is called, highlight the relevant nodes to show the data flow/logic,with animations, arrows, colors etc. to make it easy to understand what is happening. Diagram takes up about 75% of the screen by default, but with the option to hide it. Kaizen view is.
+
+Before we proceed, let's consider splitting this into 2 distinctive apps to better align with the requirements: 
+1. An interview scheduler/prep tool. Used by recruiter to generate a summary of how well the candidate's CV aligns with an open job spec (hits/misses/cv summary), drafts an interview invite email that includes possible timeslots, based on interviewer's calendar. Then sends the summary to the interviewer via email. Propose anything still needed to cover task reqs. 
+2. The "CI" tool. Chat with internal and external RAG data, view KPI performance, and run kaizen style troubleshooting. Basically what we have now. 
+Let me know if this is a better approach. Each tool would then be a more separate tab/UI. 
+
+Please review the current state, and plan out a detailed plan to implement these steps. Decide whether we should start from scratch or just amend what we already have.  
