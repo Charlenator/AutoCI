@@ -1,0 +1,4 @@
+DBOS wrap: Lift O1 into DBOS workflow
+Each DMAIC phase = Durable Step
+State persisted to Supabase via DBOS schema
+Test: kill Modal container mid-Kaizen → restart → workflow resumes from last completed phase

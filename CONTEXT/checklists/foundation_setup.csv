@@ -1,0 +1,7 @@
+Supabase project
+Supabase schema
+Modal account
+Modal hello-world FastAPI
+Vercel Next.js
+All API keys in .env
+Test: curl /health, Vercel deploy returns 200

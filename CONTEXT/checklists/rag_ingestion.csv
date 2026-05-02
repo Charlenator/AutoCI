@@ -1,0 +1,3 @@
+A6 endpoint
+Ingest 3 corpora into DB5 with chunking + embeddings
+Test: select count(*) from corpus_chunks group by corpus_name

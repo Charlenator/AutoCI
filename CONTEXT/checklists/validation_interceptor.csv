@@ -1,0 +1,2 @@
+Validation Interceptor (T2) as Python decorator
+Test: inject bad output → flagged in DB2 annotation

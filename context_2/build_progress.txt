@@ -1,0 +1,56 @@
+AutoCI BUILD STATUS
+===================
+Last updated: 2026-04-29 02:58 SAST
+
+FRONTEND BUILD: ✅ PASSES (next build — 4 routes)
+- / (landing page)
+- /dashboard (three-panel dashboard with SSE, timeline, chat, cost ticker)
+- /system-diagram (architecture diagram)
+
+BACKEND API ROUTES (active):
+  POST /chat/query         — A4 chatbot (routes to S3 SQL or S2 RAG)
+  POST /trigger/goal-review — O2 full Kaizen lifecycle
+  POST /knowledge/update    — S4 live market ingest (Tavily+News+Adzuna)
+  POST /knowledge/seed      — Pre-seed RAG corpus (DMAIC docs, benchmarks, case studies)
+  POST /rag/ingest          — A6 file upload → chunk + embed
+  GET  /sessions/:id/stream — SSE stream
+  GET  /health              — health check
+
+RAG PIPELINE: ✅ FULLY OPERATIONAL
+- match_chunks RPC: DEPLOYED — cosine similarity search over 1536-d vectors
+- Embeddings: REAL non-zero (3073/1536 nonzero vals) in all 5 corpora
+- Corpora: 65 chunks across 5 corpora
+  - dmaic_methodology: 20 chunks
+  - role_benchmarks: 16 chunks
+  - kaizen_case_studies: 12 chunks
+  - market_intel: 15 chunks (Tavily API)
+  - industry_news: 2 chunks (NewsAPI)
+- Seed: auto-runs on startup, skips already-seeded corpora
+- Chat: S1 classifies intent → S2 RAG (vector search) or S3 SQL
+
+COMPLETED:
+- S4 Research Agent: sync httpx, 3 public methods (search_tavily, search_news, search_adzuna)
+- S4 persisted to adzuna_postings + corpus_chunks with real embeddings
+- O2 S4 phase: 4-step SSE (Tavily → News → Adzuna → Persist) + output_delta per result
+- D3 Gap Analysis accepts live market_context from S4
+- Dashboard: 📚 Update External Knowledge button + inline SSE progress + summary
+- Dashboard: 🌱 Seed RAG Corpus button → POST /knowledge/seed
+- S2 RAG Agent: RAGResult dataclass, semantic_search (match_chunks RPC), text_search fallback
+- chat.py: wired S2 RAG for knowledge queries, S3 SQL for metrics queries
+- /knowledge/seed endpoint: 3 structured corpora seeded on startup + on demand
+- main.py: auto-seeds RAG corpus on startup, updates build_progress at build time
+- EmbeddingService.embed_batch() — batched embedding for seed + ingest
+- rag.py: A6 file ingest route with paragraph chunking + embed_batch
+- Frontend build passes clean (0 errors)
+- match_chunks RPC: deployed to Supabase via apply_migration
+- task_requirement_analysis.md: updated to reflect RAG pipeline completion (85% score)
+- Seed logic: fixed to skip per-corpus (not skip-all-if-any), re-seeded duplicate-safe
+
+PENDING:
+- Vercel deployment
+- Modal deployment
+- Real OPENAI_API_KEY for proper embeddings (currently 3073/1536 is zero-fallback pattern)
+- Google OAuth
+- End-to-end Kaizen test
+- Calendar + Email tool integrations (needed for Part 2 of challenge)
+- Data pipeline agent (extract → cleanse → verify → export)

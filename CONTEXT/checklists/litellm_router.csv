@@ -1,0 +1,3 @@
+Three model configs
+Logs every call to DB3
+Test: one Sonnet call + one DeepSeek call, both logged with cost

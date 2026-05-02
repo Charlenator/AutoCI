@@ -1,0 +1,3 @@
+Real Adzuna (E1) ingestion job
+Replace synthetic adzuna_postings with live data
+ON CONFLICT (adzuna_id) for dedup

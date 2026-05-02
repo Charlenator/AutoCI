@@ -1,0 +1,3 @@
+Specialist agents (S1, S2, S3, S4)
+Each callable independently
+Test: NL "What's our worst-performing stage?" → S1 → SQL → S3 calls T1 → result
