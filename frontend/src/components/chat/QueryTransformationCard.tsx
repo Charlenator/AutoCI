@@ -12,8 +12,7 @@ interface QueryTransformationCardProps {
 
 // Collapsed by default — most users want the answer, not the methodology.
 // When expanded, three blocks: Your query / What we ran / Exact query.
-// Closes the brief's "query transformation visibility" requirement; tucked away
-// so the natural-language answer stays front-and-centre for end users.
+// Restyled per style_guide.css §10 — the ONE dark surface in light mode.
 export default function QueryTransformationCard({
   plan,
   sqlResult,
@@ -26,119 +25,112 @@ export default function QueryTransformationCard({
   const liveSearchSummary = describeLiveSearch(plan, liveSearch);
 
   return (
-    <section className="border border-blue-100 rounded-md bg-blue-50">
+    <section className={`qtc${expanded ? " open" : ""}`}>
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center justify-between px-3 py-2 text-left text-xs hover:bg-blue-100 rounded-md"
+        className="qtc-head"
         aria-expanded={expanded}
       >
-        <span className="flex items-center gap-2">
-          <span className="uppercase tracking-wide font-semibold text-blue-700">
-            How this was answered
-          </span>
-          <span className="text-blue-700/80 font-normal">{route.shortLabel}</span>
+        <span className="qtc-head-l">
+          <span className="qtc-tag">How this was answered</span>
+          <span className="qtc-route">{route.shortLabel}</span>
         </span>
-        <span className="flex items-center gap-3 text-blue-700/80 tabular-nums">
-          <span>confidence {plan.confidence.toFixed(2)}</span>
-          <span aria-hidden>{expanded ? "−" : "+"}</span>
+        <span className="qtc-head-r">
+          <span className="qtc-conf">
+            confidence <b>{plan.confidence.toFixed(2)}</b>
+          </span>
+          <span className="qtc-toggle" aria-hidden>
+            {expanded ? "−" : "+"}
+          </span>
         </span>
       </button>
 
       {expanded && (
-        <div className="border-t border-blue-100 px-3 py-3 space-y-3">
-          <Block label="Your query">
-            <p className="text-sm text-gray-800 whitespace-pre-wrap">
-              {plan.original_query}
-            </p>
-          </Block>
+        <div className="qtc-body">
+          <div className="qtc-block">
+            <div className="qtc-label">Your query</div>
+            <div className="qtc-prose">{plan.original_query}</div>
+          </div>
 
-          <Block label="What we ran">
-            <div className="flex items-baseline gap-2 flex-wrap">
-              <span className="inline-block px-2 py-0.5 text-xs font-semibold rounded bg-blue-700 text-white">
-                {route.kindLabel}
-              </span>
-              <span className="text-sm text-gray-800">{route.detailLabel}</span>
+          <div className="qtc-block">
+            <div className="qtc-label">What we ran</div>
+            <div className="qtc-detail">
+              <span className="qtc-pill">{route.kindLabel}</span>
+              {route.detailLabel}
             </div>
             {liveSearchSummary && (
-              <div className="mt-2 flex items-baseline gap-2 flex-wrap">
-                <span className="inline-block px-2 py-0.5 text-xs font-semibold rounded bg-amber-600 text-white">
+              <div className="qtc-detail" style={{ marginTop: "8px" }}>
+                <span className="qtc-pill" style={{ background: "var(--debug-accent)", color: "var(--debug-bg)" }}>
                   Live web search
                 </span>
-                <span className="text-sm text-gray-800">{liveSearchSummary}</span>
+                {liveSearchSummary}
               </div>
             )}
             {plan.explanation && (
-              <p className="mt-1 text-xs text-gray-600">{plan.explanation}</p>
+              <div className="qtc-explain">{plan.explanation}</div>
             )}
             {plan.fallback_reason && (
-              <p className="mt-1 text-xs text-amber-700">
+              <div className="qtc-explain" style={{ color: "var(--debug-accent)" }}>
                 Fallback: {plan.fallback_reason}
-              </p>
+              </div>
             )}
-          </Block>
+          </div>
 
           {exactQuery && (
-            <Block label="Exact query">
+            <div className="qtc-block">
+              <div className="qtc-label">Exact query</div>
               {exactQuery.kind === "sql" && (
-                <pre className="text-xs bg-white border border-gray-200 rounded p-2 overflow-x-auto whitespace-pre-wrap text-gray-800">
-                  {exactQuery.text}
-                </pre>
+                <pre className="qtc-pre">{exactQuery.text}</pre>
               )}
               {exactQuery.kind === "vector" && (
-                <div className="text-xs bg-white border border-gray-200 rounded p-2 space-y-1">
-                  <KV k="Embedded query" v={exactQuery.query} />
-                  {exactQuery.corpusFilter && (
-                    <KV k="Corpus filter" v={exactQuery.corpusFilter} />
-                  )}
+                <div className="qtc-pre">
+                  <dl className="qtc-kv">
+                    <dt>Embedded query</dt>
+                    <dd>{exactQuery.query}</dd>
+                    {exactQuery.corpusFilter && (
+                      <>
+                        <dt>Corpus filter</dt>
+                        <dd>{exactQuery.corpusFilter}</dd>
+                      </>
+                    )}
+                  </dl>
                 </div>
               )}
               {exactQuery.kind === "combined" && (
-                <div className="space-y-2">
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   {exactQuery.sqlText && (
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">SQL</p>
-                      <pre className="text-xs bg-white border border-gray-200 rounded p-2 overflow-x-auto whitespace-pre-wrap text-gray-800">
-                        {exactQuery.sqlText}
-                      </pre>
+                      <div className="qtc-label" style={{ marginBottom: "4px" }}>
+                        SQL
+                      </div>
+                      <pre className="qtc-pre">{exactQuery.sqlText}</pre>
                     </div>
                   )}
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">Vector retrieval</p>
-                    <div className="text-xs bg-white border border-gray-200 rounded p-2 space-y-1">
-                      <KV k="Embedded query" v={exactQuery.vectorQuery} />
-                      {exactQuery.corpusFilter && (
-                        <KV k="Corpus filter" v={exactQuery.corpusFilter} />
-                      )}
+                    <div className="qtc-label" style={{ marginBottom: "4px" }}>
+                      Vector retrieval
+                    </div>
+                    <div className="qtc-pre">
+                      <dl className="qtc-kv">
+                        <dt>Embedded query</dt>
+                        <dd>{exactQuery.vectorQuery}</dd>
+                        {exactQuery.corpusFilter && (
+                          <>
+                            <dt>Corpus filter</dt>
+                            <dd>{exactQuery.corpusFilter}</dd>
+                          </>
+                        )}
+                      </dl>
                     </div>
                   </div>
                 </div>
               )}
-            </Block>
+            </div>
           )}
         </div>
       )}
     </section>
-  );
-}
-
-function Block({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <div className="text-[10px] uppercase tracking-[0.08em] text-blue-800 font-semibold mb-1">
-        {label}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function KV({ k, v }: { k: string; v: string }) {
-  return (
-    <div className="flex gap-2">
-      <span className="text-gray-500 min-w-[110px]">{k}</span>
-      <span className="text-gray-800 break-words">{v}</span>
-    </div>
   );
 }
 
@@ -147,9 +139,9 @@ function KV({ k, v }: { k: string; v: string }) {
 // ---------------------------------------------------------------------------
 
 interface RouteDescription {
-  kindLabel: string;          // big chip label
-  shortLabel: string;          // collapsed-row tail
-  detailLabel: string;         // longer explainer line
+  kindLabel: string;
+  shortLabel: string;
+  detailLabel: string;
 }
 
 function describeRoute(
@@ -247,7 +239,6 @@ function describeLiveSearch(plan: QueryPlan, liveSearch: LiveSearchPayload | nul
   if (!plan.needs_live_search) return null;
   const topic = plan.live_search_topic || plan.original_query;
 
-  // Top-level failure shape from chat.py: {"error": "live search failed: ..."}
   const topLevelError = (liveSearch as unknown as { error?: string } | null)?.error;
   if (typeof topLevelError === "string") {
     return `Failed: ${topLevelError}`;

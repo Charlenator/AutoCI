@@ -12,10 +12,15 @@ import {
 } from "../../lib/chat-types";
 import CitationChip from "./CitationChip";
 import CitationDrawer from "./CitationDrawer";
-import KnowledgeSourcesPanel from "./KnowledgeSourcesPanel";
 import QueryTransformationCard from "./QueryTransformationCard";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+const SUGGESTIONS = [
+  "What is our average time to fill for Java Developers?",
+  "Show me the offer acceptance rate for UX Designer.",
+  "What is DMAIC and how does AutoCI use it?",
+];
 
 type ChatTurn =
   | { role: "user"; id: string; content: string }
@@ -36,7 +41,6 @@ export default function ChatPanel() {
   const [pending, setPending] = useState(false);
   const [draft, setDraft] = useState("");
   const [activeCitation, setActiveCitation] = useState<{ turnId: string; citationIndex: number } | null>(null);
-  const [sourcesOpen, setSourcesOpen] = useState(false);
   const idCounter = useRef(0);
 
   const newId = useCallback(() => {
@@ -102,6 +106,10 @@ export default function ChatPanel() {
     }
   };
 
+  const handleSuggestion = (text: string) => {
+    setDraft(text);
+  };
+
   const drawerAssistantTurn = activeCitation
     ? turns.find(
         (t): t is Extract<ChatTurn, { role: "assistant" }> =>
@@ -112,22 +120,42 @@ export default function ChatPanel() {
   const drawerActiveIndex = activeCitation?.citationIndex ?? null;
 
   return (
-    <div className="flex h-full">
-      <section className="flex-1 min-w-0 flex flex-col">
-        <div className="flex items-center justify-between px-6 py-2 border-b border-gray-200 bg-white">
-          <span className="text-xs uppercase tracking-wide text-gray-500">RAG Chat</span>
-          <button
-            type="button"
-            onClick={() => setSourcesOpen(true)}
-            className="text-xs text-blue-700 hover:text-blue-900 hover:underline"
-          >
-            Browse knowledge sources
-          </button>
+    <div className="chat-page">
+      <div className="chat-col">
+        <div className="chat-header">
+          <div>
+            <h1 className="chat-title">RAG Chat</h1>
+            <p className="chat-subtitle">
+              Ask recruitment pipeline questions. The Query Planner picks the
+              right tool — SQL, vector search, or live data.
+            </p>
+          </div>
         </div>
-        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4">
+
+        <div className="chat-stream">
           {turns.length === 0 && (
-            <EmptyState />
+            <div className="empty">
+              <h3>Ask anything about your pipeline</h3>
+              <p>
+                The Query Planner picks a validated SQL template, freeform
+                SELECT, vector retrieval, or a combination of those, then shows
+                you the routing decision before the answer arrives.
+              </p>
+              <div className="suggestions">
+                {SUGGESTIONS.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    className="suggestion"
+                    onClick={() => handleSuggestion(s)}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
+
           {turns.map((turn) =>
             turn.role === "user" ? (
               <UserMessage key={turn.id} content={turn.content} />
@@ -138,40 +166,47 @@ export default function ChatPanel() {
                 onChipClick={(citationIndex) =>
                   setActiveCitation({ turnId: turn.id, citationIndex })
                 }
-                activeCitation={
-                  activeCitation && activeCitation.turnId === turn.id
-                    ? activeCitation.citationIndex
-                    : null
-                }
               />
             )
           )}
+
           {pending && (
-            <div className="text-sm text-gray-500 italic">Thinking...</div>
+            <div className="assistant-msg">
+              <div className="assistant-stamp">
+                <div className="dot">AI</div>
+                <span>Thinking...</span>
+              </div>
+            </div>
           )}
         </div>
-        <div className="border-t border-gray-200 px-6 py-3 bg-white">
-          <div className="flex gap-2">
+
+        <div className="composer">
+          <div className="composer-shell">
             <textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={onKeyDown}
-              placeholder="Ask about the recruitment pipeline. e.g. 'What's our average time to fill for Java Developers?'"
+              placeholder='Ask about the recruitment pipeline. e.g. "What&rsquo;s our average time to fill for Java Developers?"'
               rows={2}
               disabled={pending}
-              className="text-black placeholder:text-gray-800 flex-1 resize-none rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50"
             />
-            <button
-              type="button"
-              onClick={() => void send()}
-              disabled={pending || !draft.trim()}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
-            >
-              Send
-            </button>
+            <div className="composer-foot">
+              <span className="composer-hint">
+                <kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> new line
+              </span>
+              <button
+                type="button"
+                onClick={() => void send()}
+                disabled={pending || !draft.trim()}
+                className="btn btn-primary"
+              >
+                Send
+              </button>
+            </div>
           </div>
         </div>
-      </section>
+      </div>
+
       {activeCitation && (
         <CitationDrawer
           citations={drawerCitations}
@@ -179,38 +214,14 @@ export default function ChatPanel() {
           onClose={() => setActiveCitation(null)}
         />
       )}
-      <KnowledgeSourcesPanel
-        open={sourcesOpen}
-        onClose={() => setSourcesOpen(false)}
-      />
-    </div>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div className="text-sm text-gray-500 max-w-xl">
-      <p className="mb-2">
-        The Query Planner picks a validated SQL template, freeform SELECT, vector
-        retrieval, or a combination of those, then shows you the routing decision
-        before the answer arrives.
-      </p>
-      <p className="mb-2">Try one of these to see it work:</p>
-      <ul className="list-disc list-inside space-y-1">
-        <li>What is our average time to fill for Java Developers?</li>
-        <li>Show me the offer acceptance rate for UX Designer.</li>
-        <li>What is DMAIC and how does AutoCI use it?</li>
-      </ul>
     </div>
   );
 }
 
 function UserMessage({ content }: { content: string }) {
   return (
-    <div className="flex justify-end">
-      <div className="max-w-2xl bg-blue-600 text-white rounded-md px-4 py-2 text-sm whitespace-pre-wrap">
-        {content}
-      </div>
+    <div className="user-msg">
+      <div className="user-bubble">{content}</div>
     </div>
   );
 }
@@ -218,24 +229,39 @@ function UserMessage({ content }: { content: string }) {
 function AssistantMessage({
   turn,
   onChipClick,
-  activeCitation,
 }: {
   turn: Extract<ChatTurn, { role: "assistant" }>;
   onChipClick: (citationIndex: number) => void;
-  activeCitation: number | null;
 }) {
   if (turn.error) {
     return (
-      <div className="max-w-2xl bg-red-50 border border-red-200 rounded-md px-4 py-3 text-sm text-red-800">
-        {turn.error}
+      <div className="assistant-msg">
+        <div className="assistant-stamp">
+          <div className="dot">AI</div>
+          <span>Error</span>
+        </div>
+        <div
+          style={{
+            background: "#FCF6F4",
+            border: "1px solid var(--accent)",
+            borderRadius: "var(--r-lg)",
+            padding: "16px 20px",
+            color: "var(--text)",
+            fontSize: "14px",
+          }}
+        >
+          {turn.error}
+        </div>
       </div>
     );
   }
   return (
-    <div className="max-w-2xl space-y-2">
-      <div className="bg-white border border-gray-200 rounded-md px-4 py-3 text-sm text-gray-800 whitespace-pre-wrap">
-        {turn.content || "(no reply text)"}
+    <div className="assistant-msg">
+      <div className="assistant-stamp">
+        <div className="dot">AI</div>
+        <span>Assistant</span>
       </div>
+
       {turn.plan && (
         <QueryTransformationCard
           plan={turn.plan}
@@ -244,15 +270,20 @@ function AssistantMessage({
           liveSearch={turn.liveSearch}
         />
       )}
+
+      {turn.content && (
+        <div className="assistant-bubble">{turn.content}</div>
+      )}
+
       {turn.citations.length > 0 && (
-        <div className="flex items-center gap-1 flex-wrap text-xs text-gray-500">
-          <span className="uppercase tracking-wide">Sources:</span>
+        <div className="sources-row">
+          <span>Sources</span>
+          <span className="sep">·</span>
           {turn.citations.map((c) => (
             <CitationChip
               key={c.index}
               index={c.index}
               onClick={() => onChipClick(c.index)}
-              active={activeCitation === c.index}
             />
           ))}
         </div>

@@ -39,8 +39,7 @@ interface KnowledgeSourcesPanelProps {
 }
 
 // Modal-style overlay listing every RAG corpus + queryable SQL table that
-// AutoCI can answer from. Closes the brief's "≥3 structured documents
-// visibility" requirement.
+// AutoCI can answer from. Restyled per style_guide.css §16.
 export default function KnowledgeSourcesPanel({ open, onClose }: KnowledgeSourcesPanelProps) {
   const [data, setData] = useState<SourcesPayload | null>(null);
   const [loading, setLoading] = useState(false);
@@ -71,58 +70,73 @@ export default function KnowledgeSourcesPanel({ open, onClose }: KnowledgeSource
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-40 flex items-stretch justify-end bg-black/30"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-    >
-      <section
-        className="w-full max-w-2xl bg-white border-l border-gray-200 flex flex-col h-full"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <header className="flex items-center justify-between px-5 py-3 border-b border-gray-200">
+    <div className="modal-backdrop" onClick={onClose} role="dialog" aria-modal="true">
+      <section className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
           <div>
-            <h2 className="text-base font-semibold text-gray-900">Knowledge sources</h2>
-            <p className="text-xs text-gray-500">
-              Every corpus and queryable table the chat can draw from.
-            </p>
+            <h2>Knowledge sources</h2>
+            <p>Every corpus and queryable table the chat can draw from.</p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-sm text-gray-500 hover:text-gray-800 px-2 py-1"
-          >
+          <button type="button" onClick={onClose} className="btn btn-ghost">
             Close
           </button>
-        </header>
+        </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6">
+        <div className="modal-body">
           {loading && (
-            <p className="text-sm text-gray-500 italic">Loading inventory...</p>
+            <p style={{ fontSize: "13px", color: "var(--text-soft)", fontStyle: "italic" }}>
+              Loading inventory...
+            </p>
           )}
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-md px-4 py-3 text-sm text-red-800">
+            <div
+              style={{
+                background: "#FCF6F4",
+                border: "1px solid var(--accent)",
+                borderRadius: "var(--r-md)",
+                padding: "12px 14px",
+                fontSize: "13px",
+                color: "var(--text)",
+                marginBottom: "16px",
+              }}
+            >
               {error}
             </div>
           )}
-          {data && <SummaryRow summary={data.summary} />}
           {data && (
-            <Section title="Vector corpora" subtitle="Indexed in corpus_chunks (BAAI/bge-small-en-v1.5, 384-d)">
-              {data.corpora.map((c) => (
-                <CorpusCard key={c.name} corpus={c} />
-              ))}
-              {data.corpora.length === 0 && (
-                <p className="text-sm text-gray-500">No corpora yet.</p>
-              )}
-            </Section>
-          )}
-          {data && (
-            <Section title="Queryable SQL tables" subtitle="Available to the Query Planner via validated templates and freeform SELECT">
-              {data.tables.map((t) => (
-                <TableCard key={t.name} table={t} />
-              ))}
-            </Section>
+            <>
+              <div className="modal-summary">
+                <SummaryStat label="Corpora" value={data.summary.corpora_count} />
+                <SummaryStat label="Total chunks" value={data.summary.total_chunks} />
+                <SummaryStat label="SQL tables" value={data.summary.tables_count} />
+                <SummaryStat label="Total rows" value={data.summary.total_table_rows} />
+              </div>
+
+              <div style={{ marginTop: "18px" }}>
+                <div className="modal-section">
+                  <h3 className="modal-section-h">Vector corpora</h3>
+                  <p className="modal-section-sub">
+                    Indexed in corpus_chunks (BAAI/bge-small-en-v1.5, 384-d)
+                  </p>
+                  {data.corpora.length === 0 && (
+                    <p style={{ fontSize: "13px", color: "var(--text-soft)" }}>No corpora yet.</p>
+                  )}
+                  {data.corpora.map((c) => (
+                    <CorpusCard key={c.name} corpus={c} />
+                  ))}
+                </div>
+
+                <div className="modal-section">
+                  <h3 className="modal-section-h">Queryable SQL tables</h3>
+                  <p className="modal-section-sub">
+                    Available to the Query Planner via validated templates and freeform SELECT
+                  </p>
+                  {data.tables.map((t) => (
+                    <TableCard key={t.name} table={t} />
+                  ))}
+                </div>
+              </div>
+            </>
           )}
         </div>
       </section>
@@ -130,76 +144,55 @@ export default function KnowledgeSourcesPanel({ open, onClose }: KnowledgeSource
   );
 }
 
-function Section({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string;
-  subtitle: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section>
-      <header className="mb-3">
-        <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">
-          {title}
-        </h3>
-        <p className="text-xs text-gray-500">{subtitle}</p>
-      </header>
-      <div className="space-y-3">{children}</div>
-    </section>
-  );
-}
-
-function SummaryRow({ summary }: { summary: SourcesPayload["summary"] }) {
-  return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-      <SummaryStat label="Corpora" value={summary.corpora_count} />
-      <SummaryStat label="Total chunks" value={summary.total_chunks} />
-      <SummaryStat label="SQL tables" value={summary.tables_count} />
-      <SummaryStat label="Total rows" value={summary.total_table_rows} />
-    </div>
-  );
-}
-
 function SummaryStat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="bg-blue-50 border border-blue-100 rounded-md px-3 py-2">
-      <div className="text-xs uppercase tracking-wide text-blue-700">{label}</div>
-      <div className="text-lg font-semibold text-blue-900 tabular-nums">
-        {value.toLocaleString()}
-      </div>
+    <div className="summary-stat">
+      <div className="k">{label}</div>
+      <div className="v">{value.toLocaleString()}</div>
     </div>
   );
 }
 
 function CorpusCard({ corpus }: { corpus: CorpusEntry }) {
   return (
-    <article className="border border-gray-200 rounded-md p-3 bg-white">
-      <header className="flex items-baseline justify-between gap-3 mb-2">
-        <h4 className="font-semibold text-sm text-gray-900">{corpus.name}</h4>
-        <span className="text-xs text-gray-500 tabular-nums">
+    <article className="source-card">
+      <div className="source-card-head">
+        <span className="source-card-name">{corpus.name}</span>
+        <span className="source-card-meta">
           {corpus.chunk_count} chunks
           {corpus.confidential_count > 0 ? ` · ${corpus.confidential_count} confidential` : ""}
           {corpus.embedded_count !== corpus.chunk_count
             ? ` · ${corpus.embedded_count} embedded`
             : ""}
         </span>
-      </header>
-      {corpus.description && (
-        <p className="text-xs text-gray-600 mb-2">{corpus.description}</p>
-      )}
+      </div>
+      {corpus.description && <p className="source-card-desc">{corpus.description}</p>}
       {corpus.samples.length > 0 && (
-        <details className="text-xs text-gray-700">
-          <summary className="cursor-pointer hover:text-gray-900">
+        <details style={{ marginTop: "8px" }}>
+          <summary
+            style={{
+              cursor: "pointer",
+              fontFamily: "var(--font-mono)",
+              fontSize: "10px",
+              color: "var(--muted)",
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+              fontWeight: 600,
+            }}
+          >
             Sample chunks ({corpus.samples.length})
           </summary>
-          <ul className="mt-2 space-y-2">
+          <ul style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "8px" }}>
             {corpus.samples.map((s) => (
               <li
                 key={s.chunk_id}
-                className="border-l-2 border-blue-200 pl-3 text-xs whitespace-pre-wrap"
+                style={{
+                  borderLeft: "2px solid var(--ink-2)",
+                  paddingLeft: "10px",
+                  fontSize: "12px",
+                  whiteSpace: "pre-wrap",
+                  color: "var(--text-soft)",
+                }}
               >
                 {s.chunk_text}
               </li>
@@ -213,37 +206,72 @@ function CorpusCard({ corpus }: { corpus: CorpusEntry }) {
 
 function TableCard({ table }: { table: TableEntry }) {
   return (
-    <article className="border border-gray-200 rounded-md p-3 bg-white">
-      <header className="flex items-baseline justify-between gap-3 mb-2">
-        <h4 className="font-semibold text-sm text-gray-900">{table.name}</h4>
-        <span className="text-xs text-gray-500 tabular-nums">
-          {table.row_count.toLocaleString()} rows
-        </span>
-      </header>
-      {table.description && (
-        <p className="text-xs text-gray-600 mb-2">{table.description}</p>
-      )}
+    <article className="source-card">
+      <div className="source-card-head">
+        <span className="source-card-name">{table.name}</span>
+        <span className="source-card-meta">{table.row_count.toLocaleString()} rows</span>
+      </div>
+      {table.description && <p className="source-card-desc">{table.description}</p>}
       {table.columns.length > 0 && (
-        <details className="text-xs text-gray-700">
-          <summary className="cursor-pointer hover:text-gray-900">
+        <details style={{ marginTop: "8px" }}>
+          <summary
+            style={{
+              cursor: "pointer",
+              fontFamily: "var(--font-mono)",
+              fontSize: "10px",
+              color: "var(--muted)",
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+              fontWeight: 600,
+            }}
+          >
             Columns ({table.columns.length})
           </summary>
-          <ul className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+          <ul
+            style={{
+              marginTop: "8px",
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "4px 12px",
+              fontSize: "12px",
+            }}
+          >
             {table.columns.map((c) => (
-              <li key={c.column_name} className="font-mono text-gray-700">
+              <li key={c.column_name} style={{ fontFamily: "var(--font-mono)", color: "var(--text)" }}>
                 {c.column_name}
-                <span className="text-gray-400"> {c.data_type}</span>
+                <span style={{ color: "var(--muted)" }}> {c.data_type}</span>
               </li>
             ))}
           </ul>
         </details>
       )}
       {table.samples.length > 0 && (
-        <details className="text-xs text-gray-700 mt-1">
-          <summary className="cursor-pointer hover:text-gray-900">
+        <details style={{ marginTop: "8px" }}>
+          <summary
+            style={{
+              cursor: "pointer",
+              fontFamily: "var(--font-mono)",
+              fontSize: "10px",
+              color: "var(--muted)",
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+              fontWeight: 600,
+            }}
+          >
             Sample rows ({table.samples.length})
           </summary>
-          <pre className="mt-2 p-2 bg-gray-50 border border-gray-200 rounded text-xs overflow-x-auto">
+          <pre
+            style={{
+              marginTop: "8px",
+              padding: "10px 12px",
+              background: "var(--sage-wash)",
+              borderRadius: "var(--r-md)",
+              fontSize: "11.5px",
+              overflowX: "auto",
+              color: "var(--text)",
+              fontFamily: "var(--font-mono)",
+            }}
+          >
             {JSON.stringify(table.samples, null, 2)}
           </pre>
         </details>

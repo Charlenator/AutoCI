@@ -3,10 +3,8 @@
 import { useState } from "react";
 
 // Sprint A2: skeleton drawer. Renders a collapse toggle on the right edge of
-// the viewport. Empty content for now — the React Flow system diagram lights-up
-// view is wired in Sprint C5.
+// the viewport. Restyled per style_guide.css §6.
 
-const COLLAPSED_WIDTH = 36;
 const EXPANDED_WIDTH = 360;
 
 export default function RightDrawer() {
@@ -14,31 +12,28 @@ export default function RightDrawer() {
 
   return (
     <aside
-      style={{ width: open ? EXPANDED_WIDTH : COLLAPSED_WIDTH }}
-      className="border-l border-gray-200 bg-white flex flex-col flex-shrink-0 transition-[width] duration-200 ease-out"
+      className={`right-drawer${open ? " open" : ""}`}
     >
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="px-2 py-3 hover:bg-gray-50 border-b border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-800 text-xs font-medium tracking-wide uppercase"
+        className="drawer-toggle"
         aria-label={open ? "Collapse system diagram" : "Expand system diagram"}
         title={open ? "Collapse" : "System diagram"}
       >
         {open ? "Close" : "Map"}
       </button>
       {open && (
-        <div className="flex-1 overflow-y-auto p-4 text-sm text-gray-600">
-          <h2 className="font-semibold text-gray-800 mb-2 text-sm">
-            System diagram
-          </h2>
-          <p className="text-xs text-gray-500 leading-relaxed">
+        <div className="drawer-body">
+          <h3>System diagram</h3>
+          <p>
             Sprint C5 wires the live React Flow system diagram here. As agents,
             routes, and external APIs are touched across the three tabs, their
             nodes will light up cumulatively.
           </p>
-          <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded text-xs text-gray-500">
-            Placeholder. The internal dev-progress diagram lives at{" "}
-            <code className="text-gray-700">dev-tools/diagram/index.html</code>.
+          <div className="drawer-stub">
+            <span className="mono">dev-tools/diagram/index.html</span> has the
+            internal dev-progress diagram.
           </div>
         </div>
       )}

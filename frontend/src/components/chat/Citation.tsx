@@ -1,51 +1,83 @@
 "use client";
 
+import { useState } from "react";
 import type { Citation as CitationType } from "../../lib/chat-types";
 
 interface CitationProps {
   citation: CitationType;
+  focused?: boolean;
 }
 
 // Renders the full body of a single citation inside the drawer. Branches by
-// kind — RAG chunk, validated SQL template, freeform SELECT — and uses simple
-// labelled blocks. Keep it dumb; design sprint will repaint.
-export default function Citation({ citation }: CitationProps) {
+// kind — RAG chunk, validated SQL template, freeform SELECT. Restyled per
+// style_guide.css §11 + §12.
+export default function Citation({ citation, focused = false }: CitationProps) {
   return (
-    <article className="bg-white border border-gray-200 rounded-md p-4">
-      <header className="flex items-baseline justify-between mb-3 pb-2 border-b border-gray-100">
-        <h3 className="text-sm font-semibold text-gray-800">
-          [{citation.index}] {citation.shortLabel}
-        </h3>
+    <article className={`cite-card${focused ? " focused" : ""}`}>
+      <header className="cite-card-head">
+        <div className="cite-card-num">{citation.index}</div>
+        <span className="cite-card-kind">
+          {citation.kind === "rag"
+            ? "Knowledge"
+            : citation.kind === "sql_template"
+            ? "SQL Template"
+            : "Freeform SQL"}
+        </span>
+        <span className="cite-card-label">{citation.shortLabel}</span>
       </header>
-      {citation.kind === "rag" && citation.ragChunk && (
-        <RagChunkBody chunk={citation.ragChunk} />
-      )}
-      {(citation.kind === "sql_template" || citation.kind === "sql_freeform") && citation.sqlResult && (
-        <SqlResultBody sqlResult={citation.sqlResult} />
-      )}
+      <div className="cite-card-body">
+        {citation.kind === "rag" && citation.ragChunk && (
+          <RagChunkBody chunk={citation.ragChunk} />
+        )}
+        {(citation.kind === "sql_template" || citation.kind === "sql_freeform") && citation.sqlResult && (
+          <SqlResultBody sqlResult={citation.sqlResult} />
+        )}
+      </div>
     </article>
   );
 }
 
 function RagChunkBody({ chunk }: { chunk: NonNullable<CitationType["ragChunk"]> }) {
   return (
-    <div className="space-y-2 text-sm">
-      <Field label="Corpus" value={chunk.corpus_name} />
-      {chunk.similarity != null && (
-        <Field label="Similarity" value={chunk.similarity.toFixed(3)} />
-      )}
-      <div>
-        <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">
-          Chunk text
-        </div>
-        <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
-          {chunk.chunk_text}
-        </p>
-      </div>
+    <div>
+      <dl className="field-row">
+        <dt>Corpus</dt>
+        <dd>{chunk.corpus_name}</dd>
+        {chunk.similarity != null && (
+          <>
+            <dt>Similarity</dt>
+            <dd>{chunk.similarity.toFixed(3)}</dd>
+          </>
+        )}
+      </dl>
+      <div className="cite-section-label">Chunk text</div>
+      <div className="chunk-text">{chunk.chunk_text}</div>
       {chunk.metadata && Object.keys(chunk.metadata).length > 0 && (
-        <details className="text-xs text-gray-500">
-          <summary className="cursor-pointer hover:text-gray-700">Metadata</summary>
-          <pre className="mt-1 p-2 bg-gray-50 rounded border border-gray-200 overflow-x-auto">
+        <details style={{ marginTop: "10px" }}>
+          <summary
+            style={{
+              cursor: "pointer",
+              fontFamily: "var(--font-mono)",
+              fontSize: "10px",
+              color: "var(--muted)",
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+            }}
+          >
+            Metadata
+          </summary>
+          <pre
+            style={{
+              marginTop: "6px",
+              padding: "10px 12px",
+              background: "var(--sage-wash)",
+              borderRadius: "var(--r-md)",
+              fontSize: "11.5px",
+              overflowX: "auto",
+              color: "var(--text)",
+              fontFamily: "var(--font-mono)",
+            }}
+          >
             {JSON.stringify(chunk.metadata, null, 2)}
           </pre>
         </details>
@@ -55,108 +87,136 @@ function RagChunkBody({ chunk }: { chunk: NonNullable<CitationType["ragChunk"]> 
 }
 
 function SqlResultBody({ sqlResult }: { sqlResult: NonNullable<CitationType["sqlResult"]> }) {
+  return (
+    <SqlResultContent sqlResult={sqlResult} />
+  );
+}
+
+function SqlResultContent({ sqlResult }: { sqlResult: NonNullable<CitationType["sqlResult"]> }) {
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
   const rows = sqlResult.rows ?? [];
   const evidenceRows = sqlResult.evidence_rows ?? [];
   const evidenceCount = sqlResult.evidence_row_count ?? evidenceRows.length;
+
   return (
-    <div className="space-y-3 text-sm">
-      {sqlResult.template_id && (
-        <Field label="Template" value={sqlResult.template_id} />
-      )}
-      <Field label="Rows returned" value={String(sqlResult.row_count)} />
+    <div>
+      <dl className="field-row">
+        {sqlResult.template_id && (
+          <>
+            <dt>Template</dt>
+            <dd>{sqlResult.template_id}</dd>
+          </>
+        )}
+        <dt>Rows</dt>
+        <dd>{String(sqlResult.row_count)}</dd>
+      </dl>
+
       <details>
-        <summary className="cursor-pointer text-xs uppercase tracking-wide text-gray-500 hover:text-gray-700">
+        <summary className="cite-section-label" style={{ cursor: "pointer" }}>
           SQL
         </summary>
-        <pre className="mt-1 p-2 bg-gray-50 rounded border border-gray-200 overflow-x-auto text-xs text-gray-800 whitespace-pre-wrap">
+        <pre className="sql-pre" style={{ marginTop: "6px" }}>
           {sqlResult.sql.trim()}
         </pre>
       </details>
-      <RowTable label="Result rows" rows={rows} />
+
+      <div style={{ marginTop: "10px" }}>
+        {rows.length > 0 && (
+          <>
+            <div className="cite-section-label">Result</div>
+            <RowTable rows={rows} />
+          </>
+        )}
+      </div>
+
       {(evidenceRows.length > 0 || sqlResult.evidence_sql || sqlResult.evidence_error) && (
-        <details className="border-t border-gray-100 pt-3">
-          <summary className="cursor-pointer text-xs uppercase tracking-wide text-gray-500 hover:text-gray-700">
-            Source records ({evidenceCount})
-          </summary>
-          <div className="mt-2 space-y-2">
-            {sqlResult.evidence_error ? (
-              <p className="text-xs text-amber-700">
-                Couldn't load source records: {sqlResult.evidence_error}
-              </p>
-            ) : (
-              <>
-                <p className="text-xs text-gray-500">
-                  The individual records that produced the aggregate above.
-                </p>
-                <RowTable label={null} rows={evidenceRows} />
-                {sqlResult.evidence_sql && (
-                  <details>
-                    <summary className="cursor-pointer text-xs uppercase tracking-wide text-gray-500 hover:text-gray-700">
-                      Source SQL
-                    </summary>
-                    <pre className="mt-1 p-2 bg-gray-50 rounded border border-gray-200 overflow-x-auto text-xs text-gray-800 whitespace-pre-wrap">
-                      {sqlResult.evidence_sql.trim()}
-                    </pre>
-                  </details>
-                )}
-              </>
-            )}
+        <div className="evidence">
+          <div
+            className="evidence-head"
+            onClick={() => setEvidenceOpen((v) => !v)}
+          >
+            <div className="marker">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2v20M2 12h20" />
+              </svg>
+            </div>
+            <span className="evidence-title">Source records</span>
+            <span className="evidence-count">{evidenceCount}</span>
+            <span style={{ color: "var(--muted)", fontSize: "12px", fontFamily: "var(--font-mono)" }}>
+              {evidenceOpen ? "−" : "+"}
+            </span>
           </div>
-        </details>
+
+          {evidenceOpen && (
+            <div className="evidence-body">
+              {sqlResult.evidence_error ? (
+                <p className="evidence-help" style={{ color: "var(--accent)" }}>
+                  Couldn&rsquo;t load source records: {sqlResult.evidence_error}
+                </p>
+              ) : (
+                <>
+                  <p className="evidence-help">
+                    The individual records that produced the aggregate above.
+                  </p>
+                  <RowTable rows={evidenceRows} />
+                  {sqlResult.evidence_sql && (
+                    <details style={{ marginTop: "10px" }}>
+                      <summary
+                        style={{
+                          cursor: "pointer",
+                          fontFamily: "var(--font-mono)",
+                          fontSize: "10px",
+                          color: "var(--muted)",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.1em",
+                        }}
+                      >
+                        Source SQL
+                      </summary>
+                      <pre className="sql-pre" style={{ marginTop: "6px" }}>
+                        {sqlResult.evidence_sql.trim()}
+                      </pre>
+                    </details>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
 }
 
-function RowTable({ label, rows }: { label: string | null; rows: Record<string, unknown>[] }) {
+function RowTable({ rows }: { rows: Record<string, unknown>[] }) {
   if (!rows || rows.length === 0) return null;
   const columnKeys = Object.keys(rows[0]);
   const cap = 20;
   return (
     <div>
-      {label && (
-        <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">{label}</div>
-      )}
-      <div className="overflow-x-auto">
-        <table className="text-xs w-full border-collapse">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-200">
+      <table className="row-table">
+        <thead>
+          <tr>
+            {columnKeys.map((k) => (
+              <th key={k}>{k}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.slice(0, cap).map((row, i) => (
+            <tr key={i}>
               {columnKeys.map((k) => (
-                <th key={k} className="text-left font-semibold text-gray-600 px-2 py-1.5">
-                  {k}
-                </th>
+                <td key={k}>{formatCell(row[k])}</td>
               ))}
             </tr>
-          </thead>
-          <tbody>
-            {rows.slice(0, cap).map((row, i) => (
-              <tr key={i} className="border-b border-gray-100">
-                {columnKeys.map((k) => (
-                  <td key={k} className="px-2 py-1.5 text-gray-800 align-top">
-                    {formatCell(row[k])}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {rows.length > cap && (
-          <p className="text-xs text-gray-500 mt-1">
-            Showing first {cap} of {rows.length} rows.
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-baseline gap-2">
-      <span className="text-xs uppercase tracking-wide text-gray-500 min-w-[70px]">
-        {label}
-      </span>
-      <span className="text-sm text-gray-800">{value}</span>
+          ))}
+        </tbody>
+      </table>
+      {rows.length > cap && (
+        <p style={{ fontSize: "11px", color: "var(--muted)", marginTop: "6px", fontFamily: "var(--font-mono)" }}>
+          Showing first {cap} of {rows.length} rows.
+        </p>
+      )}
     </div>
   );
 }

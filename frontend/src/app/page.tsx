@@ -5,9 +5,5 @@ import ChatPanel from "../components/chat/ChatPanel";
 // Transformation Card surfaces the routing decision before the answer.
 
 export default function ChatPage() {
-  return (
-    <div className="h-full bg-white">
-      <ChatPanel />
-    </div>
-  );
+  return <ChatPanel />;
 }

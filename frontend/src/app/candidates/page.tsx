@@ -1,60 +1,60 @@
 // Sprint A2: Candidate Search tab skeleton. Real semantic search + table +
-// Schedule Meeting flow lands in Sprint B6-B8.
+// Schedule Meeting flow lands in Sprint B6-B8. Styled per style_guide.css §14.
 
 export default function CandidatesPage() {
   return (
-    <div className="h-full overflow-y-auto">
-    <div className="max-w-5xl mx-auto px-6 py-12">
-      <header className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Candidate Search</h1>
-        <p className="text-gray-600 max-w-2xl">
-          Recruiter-facing semantic search over CVs ingested via the inbound
-          email pipeline. Sortable table with download links, missing-field
-          flags, duplicate detection, and one-click meeting scheduling via
-          cal.com.
+    <div className="cand-page">
+      {/* Filters rail — stubbed for now */}
+      <aside className="filters">
+        <h3>Filters</h3>
+        <p style={{ fontSize: "13px", color: "var(--text-soft)" }}>
+          Role, skill, seniority, location, status, date-range facets land in
+          Sprint B6.
         </p>
-      </header>
+      </aside>
 
-      <section className="bg-white border border-gray-200 rounded-lg shadow-sm p-8">
-        <div className="text-center text-gray-500 max-w-md mx-auto">
-          <h2 className="text-lg font-semibold text-gray-800 mb-2">
-            Sprint B6-B8 in progress
-          </h2>
-          <p className="text-sm leading-relaxed">
-            Inbound CV pipeline (Edge Function plus Modal worker), then the
-            Candidate table, then the Schedule Meeting flow (cal.com slot grid
-            plus Resend invite) land here. Migration 004 is already applied;
-            the queue table is waiting for its first row.
+      <div className="cand-main">
+        <header className="cand-header">
+          <h1 className="chat-title">Candidate Search</h1>
+          <p className="chat-subtitle">
+            Semantic search over CVs ingested via the inbound email pipeline.
+            Sortable table with download links, missing-field flags, duplicate
+            detection, and one-click meeting scheduling via cal.com.
           </p>
+        </header>
+
+        <div className="cand-toolbar">
+          <div className="search-input">
+            <svg className="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.35-4.35" />
+            </svg>
+            <input type="text" placeholder="Semantic search (Sprint B6)…" disabled />
+          </div>
+          <span className="cand-meta">0 candidates</span>
         </div>
-      </section>
 
-      <section className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
-        <FeatureStub
-          title="Inbound CV pipeline"
-          description="Resend webhook to Edge Function to Modal worker to classify, extract, dedup, vectorize, store. .docx-only POC."
-        />
-        <FeatureStub
-          title="Schedule meeting"
-          description="14-day cal.com slot grid, recruiter ticks slots, Resend invite to candidate with deep-link buttons."
-        />
-      </section>
-    </div>
-    </div>
-  );
-}
-
-function FeatureStub({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4">
-      <h3 className="font-semibold text-gray-800 text-sm mb-1">{title}</h3>
-      <p className="text-xs text-gray-500 leading-relaxed">{description}</p>
+        <div className="cand-table-wrap" style={{ padding: "40px 32px" }}>
+          <div
+            style={{
+              maxWidth: "480px",
+              color: "var(--text-soft)",
+              fontSize: "14px",
+              lineHeight: "1.6",
+            }}
+          >
+            <h3 style={{ fontSize: "15px", color: "var(--ink)", margin: "0 0 8px", fontWeight: 600 }}>
+              Sprint B6-B8 in progress
+            </h3>
+            <p>
+              Inbound CV pipeline (Edge Function plus Modal worker), then the
+              Candidate table, then the Schedule Meeting flow (cal.com slot grid
+              plus Resend invite) land here. Migration 004 is already applied;
+              the queue table is waiting for its first row.
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

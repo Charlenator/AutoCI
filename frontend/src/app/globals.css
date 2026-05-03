@@ -1,31 +1,1512 @@
 @import "tailwindcss";
 
+/* ════════════════════════════════════════════════════════════════════════════
+   AUTOCI · STYLE GUIDE
+   Single-file source of truth. Drop this into `app/globals.css` (after
+   `@tailwind base/components/utilities` if Tailwind stays) and delete the
+   previous custom rules. Comments below tell you which component file
+   each rule is for.
+   ════════════════════════════════════════════════════════════════════════════
+
+   ─── IMPLEMENTATION RULES (read before touching any component) ────────────
+
+   1. PALETTE IS CLOSED. Every color used in the product must come from a
+      `--token` defined in :root below. If you find yourself wanting a new
+      hex code, you almost certainly want an existing token at a different
+      opacity. Use `color-mix(in oklch, var(--ink) 8%, transparent)` for
+      tints rather than inventing new hex values. The ONLY exception is
+      a single-use illustrative SVG that is locally scoped.
+
+   2. TYPE IS CLOSED. Two faces only:
+        Geist Sans — UI, copy, headings.
+        Geist Mono — IDs, SQL, table cells of computed values, debugger
+                     labels, keyboard hints, eyebrow tags.
+      Both are already wired through `next/font` in `layout.tsx`. Do not
+      import them again. Do not introduce a third family. Mono is for
+      machine-generated content; never set body copy in mono.
+
+   3. DENSITY IS COMFORTABLE. Body 15px / 1.5. Buttons 36–38px tall.
+      Sidebar items 36–40px. Card padding 16–20px. Section padding
+      20–32px horizontal. Resist the urge to compact.
+
+   4. SHADOWS ARE NEARLY ABSENT. Elevation comes from `--line` borders
+      and `--paper` over `--bg`, not from drop-shadows. The only allowed
+      shadows are `--shadow-modal` (slide-over panels) and the focus ring
+      on focused citation cards. No card-hover lift. No floating buttons.
+
+   5. RADII LADDER. 4px (chips, pills, score bars), 6px (buttons, inputs,
+      sidebar items), 10px (cards, message bubbles, modals). Never round
+      tables or thead. Never `border-radius: 9999px` on rectangles —
+      avatars only.
+
+   6. EVERY ROW/GROUP IS FLEX OR GRID WITH `gap`. Never use sibling margins
+      for spacing. Never rely on whitespace text nodes between buttons or
+      chips. This is non-negotiable: direct-manipulation edits depend on
+      it.
+
+   7. THE QTC IS THE ONE DARK SURFACE in light mode. Do not extend the
+      dark debugger aesthetic anywhere else. Other "code-looking" bits
+      (citation SQL preview) are exempt — they explicitly mirror QTC
+      styling because they're the same content type.
+
+   8. CITATION CHIPS ARE INTERACTIVE. They must always render as <button>
+      or <a>, never <span>. Hovering the chip in chat highlights the
+      matching card in the drawer (.cite-card.focused). State is owned
+      by the chat page and pushed down via context.
+
+   9. EVIDENCE BLOCK USES THE WARM ACCENT. The rust `--accent` color is
+      reserved for two things only: (a) the "Source records" drill-down
+      block inside a citation card, and (b) destructive states (errors,
+      red KPI deltas, missing-field flags). It must never appear on a
+      primary CTA.
+
+   10. PRIMARY BUTTONS ARE INK, NOT ACCENT. The primary action color is
+       `--ink` (#153243). Accent is for evidence and alerts only. If a
+       designer asks you to make the primary button rust, push back.
+
+   11. ICONS ARE STROKED, NOT FILLED. 1.4px stroke, 16×16 viewBox for nav
+       and inline icons, 14×14 for compact toolbar buttons. `currentColor`
+       so they inherit text color. No emoji anywhere in product chrome.
+
+   12. NO GRADIENTS except the one used inside the QTC head
+       (`linear-gradient(180deg, #122530 0%, #0E1B22 100%)`). No
+       gradient backgrounds on cards, buttons, hero sections, or
+       sidebars. Ever.
+
+   13. FOCUS STATES are visible. Inputs and the composer get a
+       border-color change to `--ink-2`. Buttons get a 2px outline at
+       `color-mix(in oklch, var(--ink) 30%, transparent)`. Don't suppress
+       outlines.
+
+   14. CONTAINER WIDTHS. Chat answer bubbles: 760px max. User bubbles:
+       640px max. Citation drawer: 420px fixed. Filters rail: 240px
+       fixed. CIS tools rail: 280px fixed. Modals (slide-over): 680px.
+       Sidebar: 240px.
+
+   15. TABLES. Sticky thead with `--paper` background. Row hover is
+       `--sage-wash`. No zebra striping. Numeric columns in `--mono`.
+       Never wrap a table in a card with rounded corners — round the
+       outer scroll wrapper instead, table itself stays square.
+
+   16. EMPTY STATES use a single-paragraph explanation + 2-4 suggestion
+       buttons styled as `.suggestion`. Never use illustration art.
+       Never use icons larger than the text.
+
+   17. ASK THE USER before adding any new section, page, surface, or
+       informational copy block. If a layout feels empty, solve it with
+       composition (whitespace + alignment), not by inventing content.
+   ════════════════════════════════════════════════════════════════════════════
+*/
+
+
+/* ────────────────────────────────────────────────────────────────────────
+   1. DESIGN TOKENS
+   ──────────────────────────────────────────────────────────────────────── */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* — Brand neutrals & primaries (locked by user) ———————————————— */
+  --sage:        #B4B8AB;   /* sage neutral, used at full strength rarely; mostly as tints */
+  --sage-tint:   #E5E7DF;   /* avatars, soft chips */
+  --sage-wash:   #F1F2EC;   /* hover/active row, secondary surfaces, eyebrow chip backgrounds */
+  --ink:         #153243;   /* PRIMARY. Buttons, headings, active sidebar, sidebar mark */
+  --ink-2:       #284B63;   /* secondary ink. Score bars, focused-input borders, secondary tags */
+  --accent:      #C44536;   /* warm rust. RESTRICTED — see rule #9 */
+
+  /* — Surfaces ——————————————————————————————————————————————— */
+  --bg:          #FAFAF7;   /* app background, the main canvas */
+  --paper:       #FFFFFF;   /* cards, sidebar, modals, tables */
+
+  /* — Strokes ——————————————————————————————————————————————— */
+  --line:        #E1E2DA;   /* default 1px borders everywhere */
+  --line-strong: #C8CCC0;   /* hover-state borders, dashed dividers, kbd borders */
+
+  /* — Text ——————————————————————————————————————————————————— */
+  --text:        #1F2A30;   /* default body copy */
+  --text-soft:   #4A5760;   /* secondary copy, descriptions, table cells */
+  --muted:       #6B7470;   /* metadata, eyebrow labels, table headers, captions */
+
+  /* — Debugger surface (QTC + citation SQL preview ONLY) ——————— */
+  --debug-bg:      #0E1B22; /* dark panel base */
+  --debug-line:    #1F343F; /* internal hairlines */
+  --debug-text:    #C4D5DE; /* primary debug copy */
+  --debug-mute:    #6B8593; /* debug labels, secondary info */
+  --debug-accent:  #E8B563; /* QTC route name, confidence value, eyebrow tags. Amber. */
+
+  /* — Status / KPI deltas ——————————————————————————————————— */
+  --warn-bg:     #FFF6EB;   /* CIS active-phase pill, HITL bar */
+  --warn-fg:     #9A6300;   /* the text that sits on --warn-bg */
+
+  /* — Geometry ——————————————————————————————————————————————— */
+  --r-xs: 3px;
+  --r-sm: 4px;     /* chips, pills, score bars */
+  --r-md: 6px;     /* buttons, inputs, sidebar items, sources buttons */
+  --r-lg: 10px;    /* cards, modals, message bubbles, QTC */
+
+  /* — Elevation (use sparingly) ——————————————————————————————— */
+  --shadow-modal: -12px 0 40px rgba(15, 30, 40, 0.12);
+  --ring-focus:   0 0 0 3px rgba(21, 50, 67, 0.08);          /* citation card focused */
+  --ring-active:  0 0 0 3px rgba(40, 75, 99, 0.08);          /* CIS active phase */
+
+  /* — Typography ——————————————————————————————————————————————— */
+  --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ────────────────────────────────────────────────────────────────────────
+   2. RESET / BASE — Applies everywhere
+   ──────────────────────────────────────────────────────────────────────── */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+/* Type-utility class. Apply to: SQL, candidate IDs, session pills, kbd hints,
+   table cells of numeric/computed values, citation drawer field rows, eyebrow
+   tags, debugger labels. */
+.mono { font-family: var(--font-mono); }
+
+
+/* Light scrollbars project-wide */
+*::-webkit-scrollbar          { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb    { background: #D8DAD0; border-radius: 5px; border: 2px solid var(--bg); }
+*::-webkit-scrollbar-thumb:hover { background: var(--line-strong); }
+
+
+/* ────────────────────────────────────────────────────────────────────────
+   3. APP SHELL — layout.tsx
+   The top-level grid that wraps every authenticated page.
+   ──────────────────────────────────────────────────────────────────────── */
+
+/* Wraps everything inside layout.tsx's <body>. Two columns: 240px sidebar + main */
+.app {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 100vh;
 }
+
+/* The right column. Holds the topbar + main + drawer. */
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* Holds main content + edge-tab right drawer side-by-side. */
+.main-wrap {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+
+/* ────────────────────────────────────────────────────────────────────────
+   4. SIDEBAR — Sidebar.tsx
+   The current TopNav is a tab strip. Replace it with this vertical rail.
+   File rename: TopNav.tsx → Sidebar.tsx; export both names if you need to
+   avoid breaking imports.
+   ──────────────────────────────────────────────────────────────────────── */
+
+.sidebar {
+  background: var(--paper);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: hidden; /* nav-section scrolls if overflow */
+}
+
+/* Brand block at top of sidebar. */
+.brand {
+  padding: 18px 20px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.brand-mark {
+  width: 28px; height: 28px;
+  border-radius: var(--r-md);
+  background: var(--ink);
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  display: grid;
+  place-items: center;
+}
+.brand-name {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  font-size: 15px;
+  color: var(--ink);
+}
+.brand-sub {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 1px;
+  letter-spacing: 0.02em;
+  font-family: var(--font-mono);
+}
+
+/* Workspace switcher chip below brand. Click opens a dropdown (TODO when
+   multi-workspace lands; for now it's static). */
+.workspace {
+  margin: 14px 12px 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--sage-wash);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.workspace:hover { border-color: var(--line-strong); }
+.workspace-dot {
+  width: 22px; height: 22px;
+  border-radius: 5px;
+  background: var(--ink-2);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  display: grid;
+  place-items: center;
+}
+.workspace-meta { flex: 1; min-width: 0; }
+.workspace-name { font-size: 13px; font-weight: 500; color: var(--text); line-height: 1.1; }
+.workspace-role { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.workspace-caret { color: var(--muted); font-size: 10px; }
+
+/* Each grouped block of nav items has a small uppercase eyebrow label. */
+.nav-section { padding: 14px 12px 4px; flex-shrink: 0; }
+.nav-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  padding: 0 8px 6px;
+  font-weight: 600;
+}
+
+/* The vertical list of nav links. Three primary destinations:
+   RAG Chat, Candidate Search, Continuous Improvement. */
+.nav { display: flex; flex-direction: column; gap: 1px; }
+.nav a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: var(--r-md);
+  color: var(--text-soft);
+  text-decoration: none;
+  font-size: 13.5px;
+  font-weight: 450;
+  position: relative;
+}
+.nav a:hover { background: var(--sage-wash); color: var(--ink); }
+.nav a.active { background: var(--sage-wash); color: var(--ink); font-weight: 550; }
+
+/* Active rail indicator — 2px ink strip flush to sidebar edge. */
+.nav a.active::before {
+  content: "";
+  position: absolute;
+  left: -12px; top: 8px; bottom: 8px;
+  width: 2px;
+  background: var(--ink);
+  border-radius: 0 2px 2px 0;
+}
+.nav-icon { width: 16px; height: 16px; flex-shrink: 0; color: currentColor; }
+
+/* Right-aligned keyboard shortcut. */
+.nav-meta {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+
+/* Bottom of sidebar — Knowledge Sources entry. Always pinned. */
+.sidebar-foot { margin-top: auto; padding: 12px; border-top: 1px solid var(--line); flex-shrink: 0; }
+.sources-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  font-size: 12.5px;
+  color: var(--text-soft);
+  font-family: inherit;
+  cursor: pointer;
+}
+.sources-btn:hover { border-color: var(--line-strong); color: var(--ink); }
+.sources-btn .count { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+
+
+/* ────────────────────────────────────────────────────────────────────────
+   5. TOP BAR — layout.tsx (keep as a thin slice atop main)
+   48px tall. Holds breadcrumb + session metadata + window-level icons.
+   ──────────────────────────────────────────────────────────────────────── */
+
+.topbar {
+  height: 48px;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  flex-shrink: 0;
+}
+
+.crumb { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-soft); }
+.crumb .sep  { color: var(--line-strong); }
+.crumb .here { color: var(--ink); font-weight: 550; }
+
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+
+/* Mono pill used for session IDs, candidate counts in topbar, etc. */
+.session-pill {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+
+/* 30×30 icon-only buttons in the topbar (cost, settings, etc.) */
+.icon-btn {
+  width: 30px; height: 30px;
+  border-radius: var(--r-md);
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  cursor: pointer;
+  background: none;
+  border: 1px solid transparent;
+}
+.icon-btn:hover { background: var(--sage-wash); color: var(--ink); }
+
+
+/* ────────────────────────────────────────────────────────────────────────
+   6. RIGHT DRAWER — RightDrawer.tsx
+   Edge-tab collapsed by default (48px), expands to 360px when open.
+   Holds the React Flow system map.
+   ──────────────────────────────────────────────────────────────────────── */
+
+.right-drawer {
+  width: 48px;
+  border-left: 1px solid var(--line);
+  background: var(--paper);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transition: width 0.2s ease;
+}
+.right-drawer.open { width: 360px; }
+
+/* The "Map" tab strip / close button along the top of the drawer. */
+.drawer-toggle {
+  width: 100%;
+  height: 48px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-sans);
+}
+.drawer-toggle:hover { color: var(--ink); background: var(--sage-wash); }
+
+.drawer-body { padding: 16px; font-size: 13px; color: var(--text-soft); overflow: auto; flex: 1; }
+.drawer-body h3 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink);
+}
+.drawer-body p { font-size: 12.5px; line-height: 1.55; color: var(--text-soft); margin: 0 0 10px; }
+
+/* "Mounts here" placeholder for the React Flow canvas. */
+.drawer-stub {
+  background: var(--sage-wash);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+
+
+/* ────────────────────────────────────────────────────────────────────────
+   7. BUTTONS — used everywhere
+   Three variants: default, primary (ink), ghost (transparent).
+   Apply directly via className or wrap in a <Button> component.
+   ──────────────────────────────────────────────────────────────────────── */
+
+.btn {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 14px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--text);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: border-color 0.12s, background 0.12s, color 0.12s;
+}
+.btn:hover  { border-color: var(--line-strong); }
+.btn:focus-visible { outline: 2px solid color-mix(in oklch, var(--ink) 30%, transparent); outline-offset: 1px; }
+
+/* Primary CTA. Used for: Send (composer), Schedule (candidate row), Advance
+   (HITL CIS phase). NEVER use accent rust for primary. */
+.btn-primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+.btn-primary:hover { background: #0F2935; border-color: #0F2935; }
+
+/* Ghost — used for tertiary actions like Close in modals/drawers. */
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-soft);
+}
+.btn-ghost:hover { background: var(--sage-wash); color: var(--ink); }
+
+
+/* ────────────────────────────────────────────────────────────────────────
+   8. CHAT PAGE — page.tsx (chat root) + ChatPanel.tsx
+   ──────────────────────────────────────────────────────────────────────── */
+
+.chat-page  { display: flex; flex: 1; min-height: 0; }
+.chat-col   { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+.chat-header {
+  padding: 20px 32px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+}
+/* Page title style — also used for cand-header h1 and cis-header h1. */
+.chat-title    { font-size: 20px; font-weight: 600; color: var(--ink); letter-spacing: -0.01em; margin: 0; }
+.chat-subtitle { font-size: 13px; color: var(--text-soft); margin: 4px 0 0; max-width: 520px; }
+
+.chat-header-actions { display: flex; gap: 8px; }
+
+/* The scrolling stream of messages. */
+.chat-stream {
+  flex: 1;
+  overflow-y: auto;
+  padding: 28px 32px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* — Empty state shown when no thread exists yet ————————————————— */
+.empty { max-width: 560px; color: var(--text-soft); font-size: 14px; line-height: 1.6; }
+.empty h3 { font-size: 15px; color: var(--ink); margin: 0 0 8px; font-weight: 600; }
+.suggestions { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+.suggestion {
+  text-align: left;
+  cursor: pointer;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--paper);
+  color: var(--text);
+  font-size: 13.5px;
+  font-family: inherit;
+}
+.suggestion:hover { border-color: var(--line-strong); background: var(--sage-wash); }
+
+/* — User message ————————————————————————————————————————— */
+.user-msg    { align-self: flex-end; max-width: 640px; }
+.user-bubble {
+  background: var(--ink);
+  color: #fff;
+  padding: 12px 16px;
+  border-radius: 14px 14px 2px 14px; /* tail bottom-right */
+  font-size: 14px;
+  line-height: 1.55;
+}
+.user-meta {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: right;
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+}
+
+/* — Assistant message — three stacked rows: stamp, QTC, bubble, sources — */
+.assistant-msg { max-width: 760px; display: flex; flex-direction: column; gap: 10px; }
+
+.assistant-stamp {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11.5px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+}
+.assistant-stamp .dot {
+  width: 18px; height: 18px;
+  border-radius: 5px;
+  background: var(--ink-2);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+}
+
+.assistant-bubble {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 18px 20px;
+  font-size: 14.5px;
+  line-height: 1.65;
+  color: var(--text);
+}
+.assistant-bubble p { margin: 0 0 10px; }
+.assistant-bubble p:last-child { margin-bottom: 0; }
+
+/* Footer row of citation chips beneath the bubble. */
+.sources-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.sources-row .sep { color: var(--line-strong); }
+
+
+/* ────────────────────────────────────────────────────────────────────────
+   9. CITATION CHIP — CitationChip.tsx
+   Inline numbered chip. Always interactive. Renders as <button>.
+   The `.active` state is set by the parent when the matching card in the
+   drawer is focused (or vice versa).
+   ──────────────────────────────────────────────────────────────────────── */
+
+.cite-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--r-sm);
+  background: var(--sage-tint);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  border: 1px solid var(--line-strong);
+  margin: 0 1px;
+  cursor: pointer;
+  vertical-align: 1px;
+  text-decoration: none;
+}
+.cite-chip:hover,
+.cite-chip.active {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+
+
+/* ────────────────────────────────────────────────────────────────────────
+   10. QUERY TRANSFORMATION CARD — QueryTransformationCard.tsx
+   The dark debugger panel. The ONE place the dark surface appears in
+   light mode (citation SQL preview is the only exception). Collapsible.
+   ──────────────────────────────────────────────────────────────────────── */
+
+.qtc {
+  background: var(--debug-bg);
+  color: var(--debug-text);
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow: hidden;
+  border: 1px solid var(--debug-line);
+}
+
+.qtc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  cursor: pointer;
+  background: linear-gradient(180deg, #122530 0%, var(--debug-bg) 100%);
+  border-bottom: 1px solid transparent;
+}
+.qtc.open .qtc-head { border-bottom-color: var(--debug-line); }
+
+.qtc-head-l { display: flex; align-items: center; gap: 10px; min-width: 0; }
+
+/* Eyebrow label inside QTC head — "how this was answered". */
+.qtc-tag {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--debug-accent);
+}
+.qtc-route { color: var(--debug-text); font-size: 11.5px; }
+
+.qtc-head-r { display: flex; align-items: center; gap: 14px; color: var(--debug-mute); font-size: 11px; }
+.qtc-conf   { color: var(--debug-text); }
+.qtc-conf b { color: var(--debug-accent); font-weight: 600; }
+.qtc-toggle { color: var(--debug-mute); font-size: 14px; line-height: 1; width: 14px; text-align: center; }
+
+.qtc-body { padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+
+/* Each labeled section inside the body (your query, what we ran, sql, vector). */
+.qtc-block {}
+.qtc-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--debug-mute);
+  margin: 0 0 6px;
+}
+
+/* Prose lines inside the QTC body that should NOT be mono — the user's
+   original query, the explainer copy. */
+.qtc-prose   { color: var(--debug-text); font-family: var(--font-sans); font-size: 13px; line-height: 1.5; }
+.qtc-detail  { color: var(--debug-text); font-size: 12.5px; font-family: var(--font-sans); }
+.qtc-explain { color: var(--debug-mute); font-size: 12px; margin-top: 6px; font-family: var(--font-sans); }
+
+/* The route pill — shows "VALIDATED TEMPLATE", "FREEFORM SELECT", "VECTOR", etc. */
+.qtc-pill {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  background: var(--ink-2);
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: var(--r-xs);
+  margin-right: 8px;
+  text-transform: uppercase;
+}
+
+/* SQL or other code shown inside the QTC. */
+.qtc-pre {
+  background: #091418;
+  border: 1px solid var(--debug-line);
+  border-radius: 5px;
+  padding: 10px 12px;
+  color: var(--debug-text);
+  font-size: 11.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+}
+
+/* Key/value list — used for vector params (embedded query, corpus filter). */
+.qtc-kv { display: grid; grid-template-columns: 140px 1fr; gap: 6px 12px; font-size: 12px; }
+.qtc-kv dt { color: var(--debug-mute); }
+.qtc-kv dd { margin: 0; color: var(--debug-text); word-break: break-word; }
+
+
+/* ────────────────────────────────────────────────────────────────────────
+   11. CITATION DRAWER + CITATION CARD
+   CitationDrawer.tsx (the side panel) + Citation.tsx (a single card)
+   "Quiet inline panel beside the chat" — fixed 420px column.
+   ──────────────────────────────────────────────────────────────────────── */
+
+.cite-drawer {
+  width: 420px;
+  flex-shrink: 0;
+  background: var(--paper);
+  border-left: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.cite-drawer-head {
+  padding: 18px 20px 12px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cite-drawer-head h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cite-drawer-head .badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  background: var(--sage-wash);
+  color: var(--ink);
+  padding: 2px 6px;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--line);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+.cite-drawer-head p { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+
+.cite-drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* — One citation card — Citation.tsx ——————————————————————————— */
+.cite-card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+/* Set when a chat-side citation chip is hovered/clicked or vice versa. */
+.cite-card.focused {
+  border-color: var(--ink);
+  box-shadow: var(--ring-focus);
+}
+
+.cite-card-head {
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--sage-wash);
+}
+.cite-card-num {
+  width: 22px; height: 22px;
+  background: var(--ink);
+  color: #fff;
+  border-radius: 5px;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+}
+.cite-card-kind {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-2);
+  font-weight: 600;
+}
+.cite-card-label {
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--ink);
+  flex: 1;
+  min-width: 0;
+}
+
+.cite-card-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+
+/* Field/value rows inside a citation card — template, rows, corpus, similarity, etc. */
+.field-row {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 10px;
+  font-size: 12.5px;
+  align-items: baseline;
+}
+.field-row dt {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 10.5px;
+  font-family: var(--font-mono);
+}
+.field-row dd { margin: 0; color: var(--text); font-family: var(--font-mono); font-size: 12px; }
+
+/* Section eyebrow inside a citation card — "result", "sql", "chunk". */
+.cite-section-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin: 6px 0 4px;
+  font-weight: 600;
+}
+
+/* The retrieved chunk text for a vector citation. Soft sage wash + left rule. */
+.chunk-text {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+  background: var(--sage-wash);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+  border-left: 2px solid var(--ink-2);
+}
+
+/* SQL preview inside a SQL citation card — same dark surface as QTC. */
+.sql-pre {
+  margin: 0;
+  background: var(--debug-bg);
+  color: var(--debug-text);
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+  overflow-x: auto;
+  border: 1px solid var(--debug-line);
+}
+
+/* Tabular result preview inside SQL citations and the evidence drill-down. */
+.row-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+.row-table thead { background: var(--sage-wash); }
+.row-table th {
+  text-align: left;
+  padding: 6px 10px;
+  font-weight: 600;
+  color: var(--ink);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--line);
+}
+.row-table td { padding: 6px 10px; border-bottom: 1px solid var(--line); color: var(--text); }
+.row-table tr:last-child td { border-bottom: 0; }
+
+
+/* ────────────────────────────────────────────────────────────────────────
+   12. EVIDENCE BLOCK — inside Citation.tsx (the climax)
+   The "Source records" drill-down at the bottom of a SQL citation card.
+   This is the ONE place the rust accent appears in the citation surface.
+   ──────────────────────────────────────────────────────────────────────── */
+
+.evidence {
+  margin-top: 6px;
+  border-top: 1px dashed var(--line-strong);
+  padding-top: 14px;
+  position: relative;
+}
+.evidence-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 6px 0;
+}
+.evidence-head .marker {
+  width: 18px; height: 18px;
+  border-radius: var(--r-sm);
+  background: var(--accent);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+.evidence-title { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.evidence-count { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+
+/* The expanded body — accent left rule + warm wash background. */
+.evidence-body {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-left: 2px solid var(--accent);
+  background: #FCF6F4;            /* derived from --accent at low opacity */
+  border-radius: 0 var(--r-md) var(--r-md) 0;
+}
+.evidence-help { font-size: 11.5px; color: var(--text-soft); margin: 0 0 8px; }
+
+
+/* ────────────────────────────────────────────────────────────────────────
+   13. COMPOSER — ChatPanel.tsx (the textarea at bottom)
+   ──────────────────────────────────────────────────────────────────────── */
+
+.composer {
+  border-top: 1px solid var(--line);
+  background: var(--paper);
+  padding: 14px 32px 18px;
+  flex-shrink: 0;
+}
+
+/* The bordered shell that wraps textarea + foot row. */
+.composer-shell {
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--paper);
+  padding: 10px 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 0.15s;
+}
+.composer-shell:focus-within { border-color: var(--ink-2); }
+
+.composer textarea {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  resize: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text);
+  min-height: 42px;
+}
+
+.composer-foot { display: flex; align-items: center; justify-content: space-between; }
+
+/* Keyboard-shortcut hint line. */
+.composer-hint { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.composer-hint kbd {
+  background: var(--sage-wash);
+  border: 1px solid var(--line);
+  padding: 1px 5px;
+  border-radius: var(--r-xs);
+  font-family: inherit;
+  font-size: 10.5px;
+  color: var(--ink);
+}
+
+
+/* ════════════════════════════════════════════════════════════════════════
+   14. CANDIDATE SEARCH PAGE — candidates/page.tsx
+   Filters rail (240px) + main column with table.
+   ════════════════════════════════════════════════════════════════════════ */
+
+.cand-page { display: flex; flex: 1; min-height: 0; }
+
+/* Filters rail. Uses .filter-group blocks of facets. */
+.filters {
+  width: 240px;
+  flex-shrink: 0;
+  background: var(--paper);
+  border-right: 1px solid var(--line);
+  padding: 20px 16px;
+  overflow-y: auto;
+}
+.filters h3 {
+  margin: 0 0 14px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.filter-group { margin-bottom: 18px; }
+.filter-group .lbl {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.filter-group .lbl .clear { font-size: 10.5px; font-weight: 500; color: var(--muted); cursor: pointer; }
+
+/* One facet row — checkbox + name + count. */
+.facet {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--text);
+  padding: 5px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.facet:hover { background: var(--sage-wash); }
+.facet input { margin: 0 8px 0 0; accent-color: var(--ink); }
+.facet .ct   { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.facet.checked    { background: var(--sage-wash); }
+.facet.checked .nm { color: var(--ink); font-weight: 550; }
+
+.cand-main   { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--bg); }
+.cand-header { padding: 20px 32px 14px; border-bottom: 1px solid var(--line); background: var(--paper); }
+
+/* Toolbar above table. Holds the semantic search input + sort + export. */
+.cand-toolbar {
+  padding: 14px 32px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+}
+
+/* Generic search input style — also reusable for any search field elsewhere. */
+.search-input {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 8px 12px;
+  background: var(--paper);
+}
+.search-input:focus-within { border-color: var(--ink-2); }
+.search-input input {
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text);
+}
+.search-input .ico { color: var(--muted); font-size: 14px; line-height: 0; }
+.cand-meta { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+
+.cand-table-wrap { flex: 1; overflow: auto; padding: 0 0 24px; }
+
+/* The candidates table itself. */
+table.cand-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--paper);
+  font-size: 13.5px;
+}
+.cand-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--paper);
+  text-align: left;
+  padding: 11px 16px;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  font-weight: 600;
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-mono);
+}
+.cand-table tbody tr       { border-bottom: 1px solid var(--line); }
+.cand-table tbody tr:hover { background: var(--sage-wash); }
+.cand-table td             { padding: 12px 16px; color: var(--text); vertical-align: middle; }
+
+/* Name cell — avatar + stacked name/sub. */
+.cand-name { font-weight: 550; color: var(--ink); display: flex; align-items: center; gap: 10px; }
+.cand-avatar {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--sage-tint);
+  color: var(--ink-2);
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  border: 1px solid var(--line);
+}
+.cand-sub { font-size: 11.5px; color: var(--muted); margin-top: 1px; font-weight: 400; }
+
+/* Match score column — number + slate bar. */
+.score      { font-family: var(--font-mono); font-size: 12.5px; color: var(--ink); display: flex; align-items: center; gap: 8px; }
+.score-bar  { width: 60px; height: 5px; border-radius: 3px; background: var(--sage-wash); overflow: hidden; }
+.score-bar i { display: block; height: 100%; background: var(--ink-2); }
+
+/* Skill tags. */
+.tag {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: var(--r-xs);
+  background: var(--sage-wash);
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+  font-family: var(--font-mono);
+  margin-right: 4px;
+  letter-spacing: 0.02em;
+}
+
+/* Row-level flag. Default rust = problem. `.ok` = green-blue (slate). */
+.flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+}
+.flag::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.flag.ok       { color: var(--ink-2); }
+.flag.ok::before { background: var(--ink-2); }
+
+.row-actions { display: flex; gap: 6px; justify-content: flex-end; }
+.row-btn {
+  font-size: 11.5px;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--text-soft);
+  border-radius: 5px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.row-btn:hover         { border-color: var(--ink-2); color: var(--ink); }
+.row-btn.primary       { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+
+/* ════════════════════════════════════════════════════════════════════════
+   15. CIS PAGE — cis/page.tsx
+   Tools rail (280px) + main with charter bar + KPI strip + phase timeline.
+   ════════════════════════════════════════════════════════════════════════ */
+
+.cis-page { display: flex; flex: 1; min-height: 0; }
+
+/* Left rail — selected vs available tools. */
+.cis-side {
+  width: 280px;
+  flex-shrink: 0;
+  background: var(--paper);
+  border-right: 1px solid var(--line);
+  padding: 18px 16px;
+  overflow-y: auto;
+}
+.cis-side h3 {
+  margin: 0 0 10px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.tool-card {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: var(--paper);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.tool-card:hover  { border-color: var(--line-strong); }
+.tool-card.picked { border-color: var(--ink); background: var(--sage-wash); }
+.tool-card .nm    { font-weight: 600; color: var(--ink); display: flex; align-items: center; justify-content: space-between; }
+.tool-card .nm .reason { font-size: 10px; color: var(--ink-2); font-family: var(--font-mono); font-weight: 500; }
+.tool-card .desc  { color: var(--text-soft); font-size: 11.5px; margin-top: 3px; line-height: 1.45; }
+
+.cis-main   { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--bg); }
+.cis-header { padding: 20px 32px 14px; background: var(--paper); border-bottom: 1px solid var(--line); }
+
+/* Charter bar — shows the locked scoping decisions: role, target KPI, etc. */
+.charter-bar {
+  padding: 14px 32px;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 24px;
+  align-items: center;
+}
+.charter-item     { display: flex; flex-direction: column; gap: 2px; }
+.charter-item .k  { font-family: var(--font-mono); font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.charter-item .v  { font-size: 13px; color: var(--ink); font-weight: 550; }
+
+/* — KPI strip — used at top of CIS, optionally on chat dashboard ——— */
+.kpi-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 0 32px 0; margin-top: 14px; }
+.kpi {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+  border-left: 3px solid var(--ink-2);
+}
+/* KPI status flavors — left rule color shifts: */
+.kpi.amber   { border-left-color: #C68B00; }   /* off-target but not critical */
+.kpi.red     { border-left-color: var(--accent); } /* critically off-target */
+.kpi .k      { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-family: var(--font-mono); font-weight: 600; }
+.kpi .v      { font-size: 22px; font-weight: 600; color: var(--ink); margin-top: 4px; letter-spacing: -0.01em; }
+.kpi .d      { font-size: 11.5px; font-family: var(--font-mono); color: var(--muted); margin-top: 2px; }
+.kpi .d.neg  { color: var(--accent); }
+.kpi .d.pos  { color: var(--ink-2); }
+
+/* — Phase timeline: D, M, A, I, C as stacked cards ——————————————— */
+.timeline { padding: 24px 32px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; flex: 1; }
+
+.phase {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+/* The currently running phase. */
+.phase.active   { border-color: var(--ink-2); box-shadow: var(--ring-active); }
+/* Past phases. */
+.phase.complete {}
+
+.phase-head {
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.phase-step {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  background: var(--sage-wash);
+  color: var(--ink);
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--line);
+}
+.phase.active   .phase-step { background: var(--ink);   color: #fff; border-color: var(--ink); }
+.phase.complete .phase-step { background: var(--ink-2); color: #fff; border-color: var(--ink-2); }
+
+.phase-name { font-size: 14px; font-weight: 600; color: var(--ink); }
+.phase-sub  { font-size: 11.5px; color: var(--muted); font-family: var(--font-mono); letter-spacing: 0.04em; text-transform: uppercase; margin-top: 2px; }
+
+/* Status pill on the right of the phase head. */
+.phase-status {
+  margin-left: auto;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 3px 8px;
+  border-radius: var(--r-sm);
+}
+.phase.active   .phase-status { background: var(--warn-bg);   color: var(--warn-fg); }
+.phase.complete .phase-status { background: var(--sage-wash); color: var(--ink-2); }
+
+/* Phase body — the writeup card. */
+.writeup            { padding: 18px; }
+.writeup-head       { font-family: var(--font-mono); font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 6px; font-weight: 600; }
+.writeup-headline   { font-size: 16px; font-weight: 600; color: var(--ink); margin: 0 0 6px; line-height: 1.35; }
+.writeup-tldr       { font-size: 13.5px; color: var(--text-soft); font-style: italic; margin: 0 0 14px; line-height: 1.55; }
+.writeup-section    { margin-bottom: 14px; }
+.writeup-section .lbl { font-family: var(--font-mono); font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600; margin-bottom: 6px; }
+.writeup-list       { margin: 0; padding-left: 18px; font-size: 13.5px; color: var(--text); line-height: 1.65; }
+.writeup-list li    { margin-bottom: 4px; }
+
+/* Evidence pills inside a writeup section — link to citations. */
+.evidence-pills      { display: flex; flex-wrap: wrap; gap: 6px; }
+.evidence-pill {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  background: var(--sage-wash);
+  color: var(--ink);
+  padding: 3px 8px;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--line);
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+}
+.evidence-pill .n { color: var(--ink-2); font-weight: 600; }
+
+/* HITL bar — appears at the bottom of the active phase only. */
+.hitl {
+  border-top: 1px dashed var(--line-strong);
+  padding: 14px 18px;
+  background: var(--warn-bg);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.hitl .lbl {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--warn-fg);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+}
+.hitl-actions { margin-left: auto; display: flex; gap: 8px; }
+
+
+/* ════════════════════════════════════════════════════════════════════════
+   16. KNOWLEDGE SOURCES MODAL — KnowledgeSourcesPanel.tsx
+   Slide-over panel from the right edge. 680px wide.
+   ════════════════════════════════════════════════════════════════════════ */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 30, 40, 0.32);
+  display: flex;
+  justify-content: flex-end;
+  z-index: 50;
+}
+
+.modal {
+  width: 680px;
+  max-width: 100%;
+  background: var(--paper);
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--line);
+  box-shadow: var(--shadow-modal);
+}
+
+.modal-head {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.modal-head h2 { margin: 0; font-size: 18px; font-weight: 600; color: var(--ink); letter-spacing: -0.01em; }
+.modal-head p  { margin: 4px 0 0; font-size: 13px; color: var(--text-soft); }
+
+/* The 4-stat summary band beneath the head. */
+.modal-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  padding: 16px 24px;
+  background: var(--sage-wash);
+  border-bottom: 1px solid var(--line);
+}
+.summary-stat {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 10px 12px;
+}
+.summary-stat .k { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-family: var(--font-mono); font-weight: 600; }
+.summary-stat .v { font-size: 20px; font-weight: 600; color: var(--ink); margin-top: 2px; letter-spacing: -0.01em; }
+
+.modal-body { flex: 1; overflow-y: auto; padding: 18px 24px 24px; }
+
+.modal-section { margin-bottom: 24px; }
+.modal-section-h   { font-family: var(--font-mono); font-size: 10.5px; color: var(--ink); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600; margin: 0 0 4px; }
+.modal-section-sub { font-size: 12px; color: var(--muted); margin: 0 0 12px; }
+
+/* One source row — corpus or table. */
+.source-card {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  background: var(--paper);
+}
+.source-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.source-card-name { font-size: 13.5px; font-weight: 600; color: var(--ink); font-family: var(--font-mono); }
+.source-card-meta { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.source-card-desc { font-size: 12.5px; color: var(--text-soft); margin: 6px 0 0; line-height: 1.5; }
+
+
+/* ════════════════════════════════════════════════════════════════════════
+   17. UTILITY CLASSES — sparingly, only where a token would be repeated.
+   ════════════════════════════════════════════════════════════════════════ */
+
+.divider-rule { height: 1px; background: var(--line); margin: 0 32px; }
+
+/* Eyebrow label — re-usable mono uppercase tag. Apply to: any "section
+   label" eyebrow not already covered by .qtc-label / .writeup-head /
+   .modal-section-h. */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+}
+
+
+/* ════════════════════════════════════════════════════════════════════════
+   18. THINGS TO DELETE FROM THE EXISTING CODEBASE
+   ════════════════════════════════════════════════════════════════════════
+   - Any rule using `bg-blue-600` / `bg-blue-700`. Primary is now `--ink`.
+   - Any standalone <TopNav> tab strip styling. The new sidebar replaces it.
+   - The dashboard/page.tsx legacy page styling (out of scope; user said skip).
+   - Any rounded-pill (`rounded-full`) on rectangles. Avatars only.
+   - Any custom shadow utilities beyond the two ring variables here.
+   - Any emoji in product chrome (Lucide / Heroicons stroked icons only).
+   - Any `font-family` declarations outside this file. Two faces, period.
+   ════════════════════════════════════════════════════════════════════════ */
