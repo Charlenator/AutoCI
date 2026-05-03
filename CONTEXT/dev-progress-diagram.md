@@ -116,11 +116,16 @@ graph TB
         DB_RPC["match_chunks RPC (+ confidentiality filter)<br/>⚙️ [XS]"]:::wip
     end
 
-    subgraph EDGE [" ⚡ Supabase Edge Functions"]
-        EF_INBOUND["inbound-email handler<br/>(classify → extract → dedup → conf → vec → store)<br/>📋 [L]"]:::todoBig
-        EF_CV_CLS["CV classifier (called from EF)<br/>📋 [S]"]:::todo
-        EF_CV_EXT["CV extractor (called from EF)<br/>📋 [M]"]:::todo
-        EF_CONF["Confidentiality classifier (called from EF)<br/>📋 [S]"]:::todo
+    subgraph EDGE [" ⚡ Supabase Edge Functions (dumb pipe)"]
+        EF_INBOUND["inbound-email receiver<br/>(verify sig → Storage → queue insert → 200)<br/>📋 [M]"]:::todo
+    end
+
+    subgraph WORKER [" 🐍 Modal Python Worker (heavy processing)"]
+        W_PROCESSOR["inbound_processor.py<br/>(polls status='pending' rows)<br/>📋 [M]"]:::todo
+        W_CV_CLS["S5 CV classifier (.docx)<br/>📋 [S]"]:::todo
+        W_CV_EXT["S6 CV extractor (python-docx + LLM)<br/>📋 [M]"]:::todo
+        W_CONF["S7 Confidentiality classifier<br/>📋 [S]"]:::todo
+        W_VEC["Email vectorizer<br/>(uses T4 + match_chunks)<br/>📋 [S]"]:::todo
     end
 
     subgraph STORAGE [" 📦 Supabase Storage"]
@@ -164,13 +169,16 @@ graph TB
     O2_NEW --> K1
     O2_NEW --> K_FMEA
     E_RESEND -.inbound webhook.-> EF_INBOUND
-    EF_INBOUND --> EF_CV_CLS
-    EF_INBOUND --> EF_CV_EXT
-    EF_INBOUND --> EF_CONF
     EF_INBOUND --> ST_CV
     EF_INBOUND --> DB_INBOX
-    EF_INBOUND --> DB_CAND
-    EF_INBOUND --> DB_CV_CH
+    DB_INBOX -.polled.-> W_PROCESSOR
+    W_PROCESSOR --> W_CV_CLS
+    W_PROCESSOR --> W_CV_EXT
+    W_PROCESSOR --> W_CONF
+    W_PROCESSOR --> W_VEC
+    W_PROCESSOR --> DB_CAND
+    W_PROCESSOR --> DB_CV_CH
+    W_PROCESSOR --> DB_EMAIL_RAG
     R_INBOUND -.simulates.-> EF_INBOUND
 ```
 
@@ -253,10 +261,12 @@ graph TB
 | DB | rag_email_summaries | 📋 | S | 6 | |
 | DB | event_summaries | 📋 | S | 6 | |
 | DB | interventions | 📋 | S | 7 | |
-| Edge | inbound-email handler | 📋 | L | 6 | The big one — full pipeline |
-| Edge | CV classifier | 📋 | S | 6 | |
-| Edge | CV extractor | 📋 | M | 6 | pypdf + DeepSeek |
-| Edge | Confidentiality classifier | 📋 | S | 6 | |
+| Edge | inbound-email receiver (dumb pipe) | 📋 | M | 6 | Verify sig + Storage + queue insert + 200 |
+| Worker | inbound_processor.py | 📋 | M | 6 | Modal Python; polls pending rows; orchestrates downstream agents |
+| Worker | S5 CV classifier (.docx only) | 📋 | S | 6 | DeepSeek call |
+| Worker | S6 CV extractor (python-docx) | 📋 | M | 6 | python-docx + DeepSeek; PDF support → ROADMAP |
+| Worker | S7 Confidentiality classifier | 📋 | S | 6 | DeepSeek call |
+| Worker | Email vectorizer | 📋 | S | 6 | Uses T4 embeddings |
 | Storage | cv-attachments bucket | 📋 | XS | 6 | |
 | External | DeepSeek, OpenAI, Adzuna, Tavily, NewsAPI | ✅ | — | — | |
 | External | Resend (send + inbound) | 📋 | S | 6 | Domain already verified |

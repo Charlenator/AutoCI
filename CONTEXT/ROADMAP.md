@@ -51,6 +51,12 @@
 **Why valuable**: catches LLM-fabricated numbers and weak retrievals before they reach the user.
 **Why cut**: validated SQL templates path covers numeric accuracy in practice. Citations cover RAG traceability. The retry/sanity layers add complexity for diminishing returns at MVP.
 
+### PDF CV ingestion *(deferred from Phase 6 POC)*
+**Effort**: M
+**What**: Add PDF parsing alongside the POC's `.docx`-only extraction. Modal worker calls `pypdf` (or `pdfplumber` for tables/multi-column) to extract text, then runs the same DeepSeek extraction prompt as the `.docx` path.
+**Why valuable**: real recruiters receive a mix of `.docx` and `.pdf` CVs (probably 60/40 in favour of PDF). POC ships `.docx` only to keep the extraction loop simple; PDF closes the gap.
+**Why cut**: extraction quality varies wildly across PDF generators (Word-exported PDFs are easy; scanned/OCRd ones are hard). Sized M because handling the long tail of bad PDFs takes iteration. POC demo can use `.docx` candidates without this.
+
 ### T2.2 Evidence Selector *(deferred from Phase 4.5)*
 **Effort**: M
 **What**: Thin DeepSeek call before each K phase that takes (role, KPI, phase) and returns `{chunk_ids, postings_filter}`. K agents consume only the curated slice.

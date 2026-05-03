@@ -16,7 +16,7 @@ A single Next.js shell with **three independent interfaces** and a shared backen
 3. **Continuous Improvement Suite (CIS)** — rebranded Kaizen. Conversational scoping agent (`K_SCOPING`) holds a back-and-forth until the problem is clear, then `K_TOOL_SELECTOR` picks the subset of tools needed (could be diagnose-only via 5 Whys + Fishbone + Pareto, or full diagnose-to-fix with FMEA + interventions table + RACI). Existing K1–K7 become menu items, not a fixed pipeline.
 
 Plus, persisted across all three interfaces:
-- **Inbound email pipeline** — Resend webhook → Supabase Edge Function → CV classifier → extraction → vectorize → Storage upload → confidentiality flag → dedup. Webhook is the only trigger for CV ingestion. A `/simulate-inbound` endpoint exists for dev/test re-runs without burning real mail.
+- **Inbound email pipeline (decoupled)** — Resend webhook → Supabase Edge Function (dumb pipe: verify signature + Storage upload + insert `inbound_emails` row with `status='pending'` + return 200) → Modal Python worker (polls pending rows: classify → extract → confidentiality flag → dedup → vectorize via existing T4 embeddings → mark processed). **POC scope: `.docx` attachments only** (PDF parsing → ROADMAP). A `/simulate-inbound` endpoint replays webhook payloads for dev/test without burning real mail.
 - **Always-visible right drawer** holding the React Flow system diagram. Lights up cumulatively as nodes are touched across all three interfaces.
 - **Interventions table** (replaces Kanban) — per-Kaizen + a centralized cross-Kaizen view linking back to source.
 - **Centralized logging** — every agent call, route hit, and pipeline step persisted to Supabase (long-term archival to S3 deferred).
@@ -49,7 +49,7 @@ These were considered for current scope but cut on the 2026-05-03 sense check. T
 - ➡️ **Phase 4.5 T2.2 "Evidence Selector"** — no demonstrated need; revisit once corpora grow.
 
 ### CHANGED
-- 🔄 **Email tool** — now Resend (send) + Resend inbound webhook (receive) → Supabase Edge Function pipeline. CV classifier → field extraction → vectorize → Storage → confidentiality flag → dedup.
+- 🔄 **Email tool** — now Resend (send) + Resend inbound webhook (receive) → **decoupled** pipeline: Supabase Edge Function as dumb-pipe receiver (signature + Storage + queue insert + 200), then Modal Python worker handles classification, extraction, confidentiality, embeddings, dedup. **POC ingests `.docx` only** (PDF parsing → ROADMAP).
 - 🔄 **Calendar tool** — now cal.com (free tier) for slot lookup. Recruiter ticks slots from a 14-day grid; selected slots become deep-link booking URLs in the candidate's invite email.
 - 🔄 **S1 (Translation Agent) → Query Planner** — rebuilt as an LLM, schema-aware, JSON-emitting agent that decides on (a) validated SQL template, (b) freeform SELECT, or (c) pure vector retrieval. S3 becomes a thin SQL executor consuming whatever the planner produced.
 - 🔄 **Kaizen orchestrator → CIS orchestrator** — `K_SCOPING` (chat loop) and `K_TOOL_SELECTOR` (picks tools per charter) sit in front. K1-K7 become menu items.
@@ -138,8 +138,20 @@ FastAPI backend  (Modal)
 ├── /sources                         → Knowledge Sources Panel inventory
 └── /simulate-inbound                → dev affordance for inbound pipeline
 
-Supabase Edge Function  (webhook target for Resend inbound)
-└── classify CV → extract fields → dedup → confidentiality flag → vectorize → Storage upload → DB writes
+Supabase Edge Function  (webhook target for Resend inbound — DUMB PIPE)
+├── verify Resend signature
+├── upload attachment to Storage (cv-attachments bucket)
+├── INSERT inbound_emails (status='pending')
+└── return 200 to Resend  (sub-second response)
+
+Modal Python worker  (polls pending rows → heavy processing)
+├── classify (.docx CV vs other)        ← LLM call
+├── extract structured fields            ← python-docx + LLM
+├── confidentiality flag                 ← LLM call
+├── dedup hash check (sender + subject)
+├── vectorize via T4 embeddings (OpenAI)
+├── INSERT cv_chunks / candidates / rag_email_summaries
+└── UPDATE inbound_emails SET status='processed'
 
 Supabase  (DB + Storage)
 ├── Existing 11 tables (kept)
@@ -240,20 +252,21 @@ Each task tagged with relative effort (XS / S / M / L / XL). Anchors:
 
 | Task | Effort | Notes |
 |---|---|---|
-| Schema migrations: `inbound_emails`, extend `candidates`, `cv_chunks`, `jd_chunks`, `rag_email_summaries`, `event_summaries`, `cv-attachments` storage bucket, `confidential` columns | M | Single migration file. |
-| Supabase Edge Function for Resend inbound webhook | L | TS function. Classifier → extract → dedup → confidentiality → vectorize → Storage → DB writes. |
-| CV classifier agent (`is_cv?`) | S | DeepSeek call, JSON output `{is_cv, confidence}`. |
-| CV field extractor agent | M | `pypdf` text → DeepSeek extraction → normalized JSON. Handles missing-field flagging. |
-| Confidentiality classifier agent | S | DeepSeek call, JSON output `{confidential: bool, reason}`. |
-| Email vectorizer | S | Chunk + embed inbound email summary into `rag_email_summaries`. |
-| Dedup hash (sender + subject) | XS | Inline in Edge Function. |
+| Schema migrations: `inbound_emails` (with `status` column), extend `candidates`, `cv_chunks`, `jd_chunks`, `rag_email_summaries`, `event_summaries`, `cv-attachments` storage bucket, `confidential` columns | M | Single migration file. |
+| Supabase Edge Function — dumb-pipe webhook receiver | M | TS function. Verify Resend signature → Storage upload → INSERT `inbound_emails` (status='pending') → 200. **No** PDF parsing, **no** LLM calls, **no** embeddings. Sub-second response. |
+| Modal Python worker — pending-row processor | M | Polls (or webhook-triggered) `WHERE status='pending'`. Runs all heavy steps: classify → extract → confidentiality → dedup → vectorize → DB writes. |
+| CV classifier agent (`is_cv?`) | S | DeepSeek call from Modal worker. JSON output `{is_cv, confidence}`. |
+| CV field extractor agent (`.docx` only for POC) | M | `python-docx` text → DeepSeek extraction → normalized JSON. Handles missing-field flagging. PDF support → ROADMAP. |
+| Confidentiality classifier agent | S | DeepSeek call from Modal worker. JSON output `{confidential: bool, reason}`. |
+| Email vectorizer | S | Chunk + embed inbound email summary into `rag_email_summaries` via existing T4. |
+| Dedup hash (sender + subject) | XS | Inline in Modal worker. |
 | `match_chunks` RPC update — filter on confidentiality | XS | One WHERE-clause change. |
-| `/simulate-inbound` endpoint | S | Replays a webhook payload locally for dev. |
+| `/simulate-inbound` endpoint | S | Replays a webhook payload locally for dev (skips signature verify, inserts directly). |
 | Resend send wrapper | XS | Thin Python wrapper. |
-| cal.com slot lookup wrapper | S | Free-tier API client. Returns 14-day slot grid. |
+| cal.com slot lookup wrapper | S | Free-tier API client (spike-verified 2026-05-03). Returns 14-day slot grid. |
 | Candidate Search interface | M | New tab/route. Free-text semantic search bar + table + filters + download link + CSV export. (JD-paste fan-out → ROADMAP.) |
 | Schedule Meeting flow: slot grid + selection + Resend invite | M | UI grid + selection state + Resend send with deep-link booking URLs per slot. |
-| Test-CV generator prompt (handed to user, not built) | XS | Donna runs an LLM offline to produce 20-50 CVs; sends through `/simulate-inbound`. |
+| Test-CV generator prompt (handed to user, not built) | XS | LLM-offline-produced 20-50 `.docx` CVs; sent through `/simulate-inbound`. |
 
 ### Phase 7 — CIS rebrand + dynamic tools + Interventions table
 
@@ -324,7 +337,11 @@ Each task tagged with relative effort (XS / S / M / L / XL). Anchors:
 | `backend/api/routes/inbound.py` | 6 | 📋 | NEW — `/simulate-inbound`. |
 | `backend/api/integrations/resend_client.py` | 6 | 📋 | NEW |
 | `backend/api/integrations/cal_com_client.py` | 6 | 📋 | NEW |
-| `supabase/functions/inbound-email/index.ts` | 6 | 📋 | NEW — Edge Function. |
+| `backend/api/workers/inbound_processor.py` | 6 | 📋 | NEW — Modal Python worker for the pending-row pipeline. Classify → extract → confidentiality → vectorize. |
+| `backend/api/agents/specialists/s5_cv_classifier.py` | 6 | 📋 | NEW — `.docx` CV vs other classifier. |
+| `backend/api/agents/specialists/s6_cv_extractor.py` | 6 | 📋 | NEW — `python-docx` + LLM field extraction. |
+| `backend/api/agents/specialists/s7_confidentiality.py` | 6 | 📋 | NEW — confidentiality flag classifier. |
+| `supabase/functions/inbound-email/index.ts` | 6 | 📋 | NEW — Edge Function dumb-pipe (signature + Storage + queue insert + 200). No heavy work here. |
 | `supabase/migrations/004_inbound_pipeline.sql` | 6 | 📋 | NEW — all new tables + columns + bucket + RPC update. |
 | `supabase/migrations/005_interventions.sql` | 7 | 📋 | NEW |
 | `vercel.json` + `modal_config.py` | 8 | 📋 | NEW / cleanup. |

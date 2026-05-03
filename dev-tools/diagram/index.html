@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AutoCI — Dev Progress Diagram</title>
+  <link rel="stylesheet" href="https://esm.sh/reactflow@11.10.4/dist/style.css" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header>
+    <div>
+      <h1>AutoCI — Dev Progress</h1>
+      <p class="subtitle">Live status of every node. Pan / zoom / click. Update via CONTEXT/dev-progress-diagram.md.</p>
+    </div>
+    <div class="legend">
+      <span class="legend-item legend-done">✅ Done</span>
+      <span class="legend-item legend-wip">⚙️ In progress</span>
+      <span class="legend-item legend-todo">📋 TODO</span>
+      <span class="legend-item legend-todoBig">📋 TODO (L/XL)</span>
+    </div>
+  </header>
+  <div id="root"></div>
+  <script type="module" src="./diagram.js"></script>
+</body>
+</html>
