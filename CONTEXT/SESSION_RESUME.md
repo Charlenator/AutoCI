@@ -1,8 +1,22 @@
 # SESSION RESUME — handoff between Claude Code sessions
 
-> **Last updated**: 2026-05-02 (evening) — end of a long working session. Today's wins: Phase 4 wave A + role-scope fix + DeepSeek consolidation + data-flow architecture review + Phase 4.5 T1.1, T1.2, T2.1 (K4/K5/K6 RAG) + §I close-out (corpus dedup, USD pricing $0.14/$0.28, redirect_url persistence, system diagram redo, manual-advance HITL, real-time cost ticker).
+> ## ⚠️ 2026-05-03 PIVOT — READ THIS FIRST
 >
-> When continuing work on this project in a new session, **read this file FIRST**, then check the 🔥 Tomorrow's first-up bucket below for the four UX/feature fixes Donna flagged during browser testing.
+> The plan changed materially on 2026-05-03. The new plan-of-record lives at **`CONTEXT/plan-of-record.md`**. The old plan (`please-read-context-plan-fluffy-bentley.md`) has been archived under `CONTEXT/archive/`.
+>
+> Active dev tracking lives at **`CONTEXT/dev-progress-diagram.md`** — grouped mermaid diagram + status table for every node (UI / agent / route / table / external API / deploy target). Update it as nodes move from 📋 → ⚙️ → ✅.
+>
+> Working rules now in force (project-scoped):
+> - **Effort estimates only** — XS/S/M/L/XL anchored to shipped work. No time-based estimates.
+> - **Hard scope discipline** — cut anything that doesn't enhance the product or close a literal challenge-brief requirement. Quick wins welcome; large features only if strictly needed.
+>
+> The 🔥 "Tomorrow's first-up" bucket below is **superseded** by the new plan. Items 1-3 are absorbed into Phases 5/7 of the new plan; item 4 (Ask doesn't redirect chat) is a minor bug to retest after the Phase 5 chat tab redesign. Read `plan-of-record.md` for the full picture.
+>
+> Everything below this banner is **historical** (2026-05-02 state). Useful as backstory; not the current plan.
+
+---
+
+> **Last updated**: 2026-05-02 (evening) — end of a long working session. Today's wins: Phase 4 wave A + role-scope fix + DeepSeek consolidation + data-flow architecture review + Phase 4.5 T1.1, T1.2, T2.1 (K4/K5/K6 RAG) + §I close-out (corpus dedup, USD pricing $0.14/$0.28, redirect_url persistence, system diagram redo, manual-advance HITL, real-time cost ticker).
 
 ---
 
