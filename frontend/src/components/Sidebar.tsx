@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import KnowledgeSourcesPanel from "./chat/KnowledgeSourcesPanel";
 
 interface NavItem {
   href: string;
@@ -105,36 +106,7 @@ export default function Sidebar() {
         </div>
       </aside>
 
-      {/* Knowledge Sources Panel — mounted here for convenience */}
-      {sourcesOpen && (
-        <div
-          className="modal-backdrop"
-          onClick={() => setSourcesOpen(false)}
-        >
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            {/* KnowledgeSourcesPanel content is lazy-loaded, for now just head + close */}
-            <div className="modal-head">
-              <div>
-                <h2>Knowledge sources</h2>
-                <p>Every corpus and queryable table the chat can draw from.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSourcesOpen(false)}
-                className="btn-ghost btn"
-                aria-label="Close"
-              >
-                Close
-              </button>
-            </div>
-            <div className="modal-body">
-              <p className="text-sm" style={{ color: "var(--text-soft)" }}>
-                Loading is wired via KnowledgeSourcesPanel.tsx. This is a placeholder for the sidebar trigger.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+      <KnowledgeSourcesPanel open={sourcesOpen} onClose={() => setSourcesOpen(false)} />
     </>
   );
 }
