@@ -15,9 +15,9 @@ from api.agents.kaizen.k3_analyse_host import K3AnalyseHostAgent
 from api.agents.kaizen.k6_improve import K6ImproveAgent
 from api.agents.kaizen.k7_control import K7ControlAgent
 from api.agents.kaizen.k_writeup import WriteupAgent
-from api.agents.specialists.s1_translation import TranslationAgent
+from api.agents.specialists.s1_query_planner import QueryPlannerAgent
 from api.agents.specialists.s2_rag import RAGAgent
-from api.agents.specialists.s3_sql import SQLAgent
+from api.agents.specialists.s3_sql_executor import SQLExecutor
 from api.agents.specialists.s4_research import ResearchAgent
 from api.sse import (
     push_event, make_node_event, make_phase_event, make_output_event,
@@ -59,9 +59,9 @@ class MetaOrchestrator:
         self.k2 = K2MeasureAgent(llm_router)
         self.research = ResearchAgent(supabase_client)
         self.writeup = WriteupAgent(llm_router)
-        self.s1 = TranslationAgent()
+        self.s1 = QueryPlannerAgent(llm_router)
         self.s2 = RAGAgent(supabase_client)
-        self.s3 = SQLAgent(supabase_client, llm_router)
+        self.s3 = SQLExecutor(supabase_client)
         # K3 owns K4/K5 — give them the same RAG client so K4 can pull case
         # studies once per run and K5 can pull per-branch (Phase 4.5 T2.1).
         self.k3 = K3AnalyseHostAgent(llm_router, rag_agent=self.s2)
@@ -182,40 +182,59 @@ class MetaOrchestrator:
         role_title: str,
         data: dict,
     ) -> None:
-        """Route a user follow-up through S1 → S2/S3 and stream the answer back
-        as output_delta events tagged with the current phase."""
+        """Route a user follow-up through the Sprint B1 Query Planner pipeline
+        and stream the answer back as output_delta events tagged with the
+        current phase. Plan envelope + SQL rows + RAG chunks are also reported
+        so the timeline shows the routing decision."""
         try:
-            classification = self.s1.classify(message)
+            plan = self.s1.plan(message, session_id=session_id)
             self._out(session_id, phase, "S1",
-                      f"💬 **You asked**: {message}")
-            if classification.agent_routed_to == "s3_sql":
-                result = self.s3.execute(
-                    message,
-                    session_id=session_id,
-                    pipeline_events=data.get("pipeline_events", []),
-                    hires=data.get("hires", []),
-                    candidates=data.get("candidates", []),
-                    offer_outcomes=data.get("offer_outcomes", []),
-                )
-                if getattr(result, "computed_metrics", None):
-                    metrics_str = ", ".join(f"{k}: {v}" for k, v in result.computed_metrics.items())
-                    self._out(session_id, phase, "S3", f"📊 **Answer**: {metrics_str}")
-                elif getattr(result, "data", None):
+                      f"You asked: {message}")
+            if plan.explanation:
+                self._out(session_id, phase, "S1",
+                          f"Routing: {plan.explanation} (confidence {plan.confidence:.2f})")
+
+            answered = False
+
+            if plan.needs_sql:
+                result = self.s3.execute(plan)
+                if result.error:
                     self._out(session_id, phase, "S3",
-                              f"📊 **Answer**: {len(result.data)} rows returned by SQL.")
-                else:
+                              f"SQL error: {result.error}")
+                elif result.row_count == 0:
                     self._out(session_id, phase, "S3",
-                              "📊 No matching metric — try rephrasing.")
-            else:
-                rag = self.s2.retrieve(message, top_k=5)
-                if getattr(rag, "chunks", None):
+                              "Structured query returned no rows.")
+                elif result.row_count == 1:
+                    only = result.rows[0]
+                    metrics_str = ", ".join(
+                        f"{k}={v}" for k, v in only.items() if v is not None
+                    )
+                    self._out(session_id, phase, "S3",
+                              f"Answer: {metrics_str}")
+                    answered = True
+                else:
+                    label = result.template_id or "freeform SELECT"
+                    self._out(session_id, phase, "S3",
+                              f"Answer ({label}): {result.row_count} rows returned.")
+                    answered = True
+
+            if plan.needs_rag:
+                rag_query = plan.rag_query or message
+                rag = self.s2.retrieve(rag_query, top_k=5)
+                chunks = getattr(rag, "chunks", None) or []
+                if chunks:
                     self._out(session_id, phase, "S2",
-                              f"📚 **Answer**: {rag.context_window[:1500]}")
+                              f"Knowledge base: {rag.context_window[:1500]}")
+                    answered = True
                 else:
                     self._out(session_id, phase, "S2",
-                              "📚 Nothing matched in the knowledge base.")
+                              "Nothing matched in the knowledge base.")
+
+            if not answered:
+                self._out(session_id, phase, "O2",
+                          "No retrieval path produced a result. Try rephrasing.")
         except Exception as e:
-            self._out(session_id, phase, "O2", f"⚠️ Ask handler error: {e}")
+            self._out(session_id, phase, "O2", f"Ask handler error: {e}")
 
     def fetch_pipeline_data(self, role_title: str | None = None) -> dict:
         """Pull pipeline data, optionally scoped to a single role.

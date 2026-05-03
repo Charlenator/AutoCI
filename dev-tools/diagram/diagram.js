@@ -17,7 +17,7 @@ import ReactFlow, {
 // Update each time work shifts. Keep both sides in sync — Charle should always
 // know what (if anything) is blocking him.
 const NOW = {
-  claude: "Sprint B1 — Query Planner + sql_templates + SQL executor + 4-layer SQL safety. Migration 005 (run_select_query RPC) applied.",
+  claude: "Sprint B1 done. Next up: B2 — Citation chip system + CitationDrawer (frontend + SSE event). Will need the Query Transformation Card stubbed too so the planner envelope renders.",
   charle: "Nothing blocking. Optional: keep generating CV batches if you want richer test data — the pipeline can ingest them once Sprint B5 lands.",
 };
 
@@ -39,9 +39,9 @@ const SPRINTS = [
     id: "B",
     label: "Brief-required closures",
     status: "in_progress",
-    progress: 0.05,
+    progress: 0.13,
     substeps: [
-      { id: "B1", label: "Query Planner + sql_templates + SQL exec + 4-layer safety", status: "in_progress" },
+      { id: "B1", label: "Query Planner + sql_templates + SQL exec + 4-layer safety", status: "done" },
       { id: "B2", label: "Citation chip system + CitationDrawer", status: "pending" },
       { id: "B3", label: "Knowledge Sources Panel + /sources route", status: "pending" },
       { id: "B4", label: "Edge Function (dumb pipe) + Modal worker scaffold", status: "pending" },
@@ -82,6 +82,7 @@ const SPRINTS = [
 // ---------- Changelog (most recent first) ----------
 // kind: 'shipped' | 'progress' | 'cut' | 'decision' | 'infra'
 const CHANGELOG = [
+  { date: "2026-05-03", kind: "shipped", text: "Sprint B1 done — Query Planner (LLM, schema-aware) + 8 validated SQL templates + thin SQL Executor + 4-layer SQL safety. Verified end-to-end: real TTF query returns 83.3 days for Senior Java Developer; DROP rejected at the DB by run_select_query." },
   { date: "2026-05-03", kind: "decision", text: "No emojis in user-facing UI. Existing nav + page placeholders rewritten to text-only." },
   { date: "2026-05-03", kind: "shipped", text: "Dev diagram: added Right-now panel + Sprint progress tracker (A/B/C/D with sub-step status)." },
   { date: "2026-05-03", kind: "infra", text: "Migration 005 applied: run_select_query RPC (Postgres-level SELECT-only enforcement, layer 4 of SQL safety)." },
@@ -162,12 +163,10 @@ const NODES_RAW = [
   ['routes', 'r_inbound',  '/simulate-inbound',                    'todo',    'S',  '6'],
 
   // SPECIALISTS
-  ['specialists', 's1_old',   'S1 TranslationAgent (replace)',    'done',    '',   '—'],
-  ['specialists', 's1_new',   'S1 QueryPlanner',                  'todoBig', 'L',  '5'],
+  ['specialists', 's1_new',   'S1 QueryPlanner',                  'done',    '',   'B1'],
   ['specialists', 's2',       'S2 RAGAgent',                      'done',    '',   '—'],
-  ['specialists', 's3_old',   'S3 SQLAgent (refactor)',           'done',    '',   '—'],
-  ['specialists', 's3_new',   'S3 SQLExecutor',                   'todo',    'S',  '5'],
-  ['specialists', 'sql_tpl',  'sql_templates dict',               'todo',    'S',  '5'],
+  ['specialists', 's3_new',   'S3 SQLExecutor',                   'done',    '',   'B1'],
+  ['specialists', 'sql_tpl',  'sql_templates dict (8 templates)', 'done',    '',   'B1'],
   ['specialists', 's4',       'S4 ResearchAgent',                 'done',    '',   '—'],
 
   // DETECTION
@@ -254,6 +253,8 @@ const EDGES_RAW = [
   ['s1_new', 's3_new'],
   ['s1_new', 's2'],
   ['s2', 'db_rpc'],
+  ['s3_new', 'db_rpc'],
+  ['sql_tpl', 's3_new'],
 
   // Candidate Search path: search -> route -> RAG / cal.com / Resend
   ['fe_csearch', 'r_cand'],

@@ -52,12 +52,10 @@ graph TB
     end
 
     subgraph BE_SPEC [" 🧠 Backend Specialists"]
-        S1_OLD["S1 TranslationAgent<br/>✅ (to be replaced)"]:::done
-        S1_NEW["S1 QueryPlanner<br/>📋 [L]"]:::todoBig
+        S1_NEW["S1 QueryPlanner<br/>✅ B1"]:::done
         S2["S2 RAGAgent<br/>✅"]:::done
-        S3_OLD["S3 SQLAgent<br/>✅ (to be refactored)"]:::done
-        S3_NEW["S3 SQLExecutor<br/>📋 [S]"]:::todo
-        SQL_TPL["sql_templates dict<br/>📋 [S]"]:::todo
+        S3_NEW["S3 SQLExecutor<br/>✅ B1"]:::done
+        SQL_TPL["sql_templates dict (8)<br/>✅ B1"]:::done
         S4["S4 ResearchAgent<br/>(Tavily / News / Adzuna)<br/>✅"]:::done
     end
 
@@ -218,12 +216,10 @@ graph TB
 | Routes | /cis/scope + /cis/run | 📋 | M | 7 | |
 | Routes | /interventions | 📋 | S | 7 | |
 | Routes | /simulate-inbound | 📋 | S | 6 | Dev affordance |
-| Specialists | S1 TranslationAgent | ✅ | — | — | To be replaced by QueryPlanner |
-| Specialists | S1 QueryPlanner | 📋 | L | 5 | LLM, schema-aware, JSON envelope |
+| Specialists | S1 QueryPlanner | ✅ | — | B1 | LLM, schema-aware, JSON envelope; legacy TranslationAgent retired |
 | Specialists | S2 RAGAgent | ✅ | — | — | |
-| Specialists | S3 SQLAgent | ✅ | — | — | To be refactored |
-| Specialists | S3 SQLExecutor | 📋 | S | 5 | Thin executor |
-| Specialists | sql_templates dict | 📋 | S | 5 | Validated query templates |
+| Specialists | S3 SQLExecutor | ✅ | — | B1 | Thin executor; legacy SQLAgent retired |
+| Specialists | sql_templates dict | ✅ | — | B1 | 8 validated templates; covers TTF/conversion/OAR/KPIs/pipeline/candidate-search/email-lookup/benchmark |
 | Specialists | S4 ResearchAgent | ✅ | — | — | Tavily / News / Adzuna |
 | Detection | D1 InternalBenchmarking | ✅ | — | 2 | |
 | Detection | D2 ExternalBenchmarking | ✅ | — | 4.5 | Live salary signal live |

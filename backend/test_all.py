@@ -72,11 +72,69 @@ def level1_unit():
     r2, v2 = bad_output_shape()
     test("T2: bad schema fails", lambda: not v2.passed)
 
-    # S1 — TranslationAgent
-    from api.agents.specialists.s1_translation import TranslationAgent
-    t = TranslationAgent()
-    test("S1: SQL routing for 'time to fill'", lambda: t.classify("What is our time to fill?").agent_routed_to == "s3_sql")
-    test("S1: RAG routing for 'culture'", lambda: t.classify("Tell me about company culture").agent_routed_to == "s2_rag")
+    # S1 — QueryPlannerAgent (Sprint B1, replaces the keyword-based TranslationAgent)
+    from api.agents.specialists.s1_query_planner import QueryPlannerAgent, QueryPlan
+    from api.agents.specialists.sql_templates import (
+        TEMPLATE_REGISTRY,
+        build_template_sql,
+        TemplateParamError,
+    )
+    test("S1: planner imports cleanly", lambda: QueryPlannerAgent is not None)
+    test("S1: template registry has at least 6 templates",
+         lambda: len(TEMPLATE_REGISTRY) >= 6)
+    test("S1: every registry entry has a builder",
+         lambda: all(t.build is not None for t in TEMPLATE_REGISTRY.values()))
+
+    # Verify each template builds with sensible inputs (or throws cleanly when required params missing).
+    sample_params = {
+        "time_to_fill": {},
+        "offer_acceptance_rate": {},
+        "conversion_rate": {},
+        "kpis_for_role": {"role_title": "Java"},
+        "pipeline_volume_by_stage": {},
+        "candidate_search_by_skill": {"skill_keyword": "Java"},
+        "candidate_by_email": {"email": "test@example.com"},
+        "industry_benchmark_for_role": {"role_title": "UX"},
+    }
+    for tid, params in sample_params.items():
+        if tid not in TEMPLATE_REGISTRY:
+            continue
+        tid_, params_ = tid, params
+        test(f"S1: template '{tid_}' builds SELECT",
+             lambda tid=tid_, p=params_: build_template_sql(tid, p).strip().upper().startswith(("SELECT", "WITH")))
+
+    # Required-param validation should raise.
+    try:
+        build_template_sql("kpis_for_role", {})
+        kpis_required_raised = False
+    except TemplateParamError:
+        kpis_required_raised = True
+    test("S1: missing required param raises TemplateParamError", lambda: kpis_required_raised)
+
+    # SQL Executor sanity (regex allowlist on freeform)
+    from api.agents.specialists.s3_sql_executor import (
+        SQLExecutor,
+        FreeformSQLValidationError,
+        _validate_freeform_sql,
+    )
+    try:
+        _validate_freeform_sql("DROP TABLE candidates")
+        drop_blocked = False
+    except FreeformSQLValidationError:
+        drop_blocked = True
+    test("S3: freeform DROP rejected by allowlist", lambda: drop_blocked)
+    try:
+        _validate_freeform_sql("SELECT 1; SELECT 2")
+        stacked_blocked = False
+    except FreeformSQLValidationError:
+        stacked_blocked = True
+    test("S3: stacked statement rejected", lambda: stacked_blocked)
+    try:
+        _validate_freeform_sql("SELECT count(*) FROM candidates")
+        select_ok = True
+    except FreeformSQLValidationError:
+        select_ok = False
+    test("S3: clean SELECT passes allowlist", lambda: select_ok)
 
     # O3 — PhaseGateEnforcer
     from api.workflows.o3_phase_gate import PhaseGateEnforcer
