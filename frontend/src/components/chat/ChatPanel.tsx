@@ -7,6 +7,7 @@ import {
   type ChatResponse,
   type Citation as CitationType,
   type QueryPlan,
+  type SqlResult,
 } from "../../lib/chat-types";
 import CitationChip from "./CitationChip";
 import CitationDrawer from "./CitationDrawer";
@@ -22,6 +23,8 @@ type ChatTurn =
       id: string;
       content: string;
       plan: QueryPlan | null;
+      sqlResult: SqlResult | null;
+      ragChunkCount: number;
       citations: CitationType[];
       error?: string;
     };
@@ -63,6 +66,8 @@ export default function ChatPanel() {
         id: newId(),
         content: data.reply,
         plan: data.plan,
+        sqlResult: data.sql_result,
+        ragChunkCount: data.rag_chunks?.length ?? 0,
         citations,
       };
       setTurns((t) => [...t, assistantTurn]);
@@ -75,6 +80,8 @@ export default function ChatPanel() {
           id: newId(),
           content: "",
           plan: null,
+          sqlResult: null,
+          ragChunkCount: 0,
           citations: [],
           error: message,
         },
@@ -222,10 +229,16 @@ function AssistantMessage({
   }
   return (
     <div className="max-w-2xl space-y-2">
-      {turn.plan && <QueryTransformationCard plan={turn.plan} />}
       <div className="bg-white border border-gray-200 rounded-md px-4 py-3 text-sm text-gray-800 whitespace-pre-wrap">
         {turn.content || "(no reply text)"}
       </div>
+      {turn.plan && (
+        <QueryTransformationCard
+          plan={turn.plan}
+          sqlResult={turn.sqlResult}
+          ragChunkCount={turn.ragChunkCount}
+        />
+      )}
       {turn.citations.length > 0 && (
         <div className="flex items-center gap-1 flex-wrap text-xs text-gray-500">
           <span className="uppercase tracking-wide">Sources:</span>

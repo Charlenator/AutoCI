@@ -5,11 +5,15 @@ Flow:
       -> S1 QueryPlanner.plan()       (LLM decides retrieval path; emits envelope)
       -> S3 SQLExecutor.execute()     (if plan.needs_sql; runs templated or freeform SELECT)
       -> S2 RAGAgent.retrieve()       (if plan.needs_rag; vector search)
-      -> compose reply + citations    (returned to frontend; includes the plan envelope so the
+      -> _natural_reply()             (LLM rewrites the structured results into a
+                                       human-readable answer; B2 follow-up)
+      -> compose response             (returned to frontend; includes the plan envelope so the
                                        Query Transformation Card can render it)
 """
 
 from __future__ import annotations
+
+import json
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
@@ -84,7 +88,14 @@ async def chat_query(body: ChatRequest, request: Request):
                 for c in chunks
             ]
 
-        reply = _compose_reply(plan, sql_payload, rag_chunks_payload)
+        reply = _natural_reply(
+            llm,
+            user_query=body.message,
+            plan=plan,
+            sql_payload=sql_payload,
+            rag_chunks=rag_chunks_payload,
+            session_id=body.session_id,
+        )
         legacy_sources = _legacy_sources(sql_payload, rag_chunks_payload)
 
         return ChatResponse(
@@ -100,45 +111,119 @@ async def chat_query(body: ChatRequest, request: Request):
 
 
 # ---------------------------------------------------------------------------
-# Reply composition
+# Reply composition — natural-language wrapper over the structured results
 # ---------------------------------------------------------------------------
 
-def _compose_reply(plan, sql_payload: dict | None, rag_chunks: list[dict] | None) -> str:
-    """Assemble a human-readable reply. Frontend will progressively replace
-    this with the Query Transformation Card (B1) + Citation Drawer (B2)."""
+_NATURAL_REPLY_SYSTEM_PROMPT = """You are a recruitment-analytics assistant. The user asked a question. The structured retrieval results that answer it are below.
 
+Write a concise, natural-language answer that:
+- States the actual numbers from the results, with units (days / %% / ZAR / count).
+- Phrases the answer as if speaking to a recruiter — not as a SQL recap.
+- Stays 1-3 sentences unless the data legitimately needs more.
+- Does NOT explain methodology, mention SQL, mention "templates", or speculate beyond the data.
+- If the result is empty or errored, says so plainly without making up information.
+- Does NOT include a leading sentence like "Here is the answer:" — just give the answer.
+- Does NOT add inline citation markers like [1] or [2] — the frontend renders citation chips separately.
+"""
+
+
+def _natural_reply(
+    llm,
+    *,
+    user_query: str,
+    plan,
+    sql_payload: dict | None,
+    rag_chunks: list[dict] | None,
+    session_id: str | None,
+) -> str:
+    """Ask the LLM to phrase the structured results as a human answer.
+
+    Falls back to a deterministic compose if the LLM call fails — the user
+    still gets *something*, even if it's the older key=value style.
+    """
+    formatted = _format_results_for_llm(sql_payload, rag_chunks)
+    if not formatted.strip():
+        if plan.fallback_reason:
+            return f"I couldn't find anything relevant ({plan.fallback_reason})."
+        return "I couldn't find anything relevant. Try rephrasing the question."
+
+    user_block = (
+        f"User question:\n{user_query}\n\n"
+        f"Retrieval results:\n{formatted}\n\n"
+        "Natural-language answer:"
+    )
+
+    try:
+        content, _log = llm.route(
+            "dmaic_narrative",
+            [
+                {"role": "system", "content": _NATURAL_REPLY_SYSTEM_PROMPT},
+                {"role": "user", "content": user_block},
+            ],
+            session_id=session_id,
+            from_agent="chat_query",
+            to_agent="t3_llm",
+        )
+        text = (content or "").strip()
+        if text:
+            return text
+    except Exception:
+        # fall through to deterministic compose
+        pass
+
+    return _deterministic_compose(plan, sql_payload, rag_chunks)
+
+
+def _format_results_for_llm(
+    sql_payload: dict | None,
+    rag_chunks: list[dict] | None,
+) -> str:
+    """Compact, prompt-friendly summary of the structured results."""
     parts: list[str] = []
 
-    if plan.explanation:
-        parts.append(plan.explanation)
-
-    # SQL summary
     if sql_payload:
         if sql_payload.get("error"):
             parts.append(f"SQL execution failed: {sql_payload['error']}")
         else:
+            template_id = sql_payload.get("template_id")
+            label = f"validated template '{template_id}'" if template_id else "freeform SELECT"
             row_count = sql_payload.get("row_count", 0)
+            rows = sql_payload.get("rows", [])
             if row_count == 0:
-                parts.append("The structured query returned no rows.")
-            elif row_count == 1:
-                # If single-row, dump key=value for a clean answer.
-                only = sql_payload["rows"][0]
-                summary = ", ".join(
-                    f"{k}={v}" for k, v in only.items() if v is not None
-                )
-                parts.append(summary)
+                parts.append(f"SQL ({label}) returned 0 rows.")
             else:
-                parts.append(f"The structured query returned {row_count} rows.")
+                preview = rows[: min(10, row_count)]
+                rows_json = json.dumps(preview, default=str, indent=None)
+                parts.append(
+                    f"SQL ({label}) returned {row_count} row{'s' if row_count != 1 else ''}: {rows_json}"
+                )
 
-    # RAG summary
     if rag_chunks:
-        n = len(rag_chunks)
-        parts.append(f"Retrieved {n} supporting chunk{'s' if n != 1 else ''} from the knowledge base.")
+        for i, c in enumerate(rag_chunks, start=1):
+            corpus = c.get("corpus_name", "knowledge")
+            text = (c.get("chunk_text") or "")[:400]
+            sim = c.get("similarity")
+            sim_s = f" sim={sim:.2f}" if isinstance(sim, (float, int)) else ""
+            parts.append(f"[RAG #{i} {corpus}{sim_s}] {text}")
 
-    if not parts:
-        parts.append("No retrieval path produced a result. Try rephrasing the question.")
+    return "\n\n".join(parts)
 
-    return " ".join(parts)
+
+def _deterministic_compose(
+    plan,
+    sql_payload: dict | None,
+    rag_chunks: list[dict] | None,
+) -> str:
+    """Last-resort reply when the LLM call fails."""
+    bits: list[str] = []
+    if plan.explanation:
+        bits.append(plan.explanation)
+    if sql_payload and not sql_payload.get("error"):
+        rc = sql_payload.get("row_count", 0)
+        bits.append(f"({rc} structured row{'s' if rc != 1 else ''} returned)")
+    if rag_chunks:
+        bits.append(f"({len(rag_chunks)} knowledge chunk{'s' if len(rag_chunks) != 1 else ''} retrieved)")
+    return " ".join(bits) if bits else "No retrieval path produced a result."
 
 
 def _legacy_sources(sql_payload: dict | None, rag_chunks: list[dict] | None) -> list[str]:
