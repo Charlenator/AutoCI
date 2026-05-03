@@ -17,7 +17,7 @@ import ReactFlow, {
 // Update each time work shifts. Keep both sides in sync — Charle should always
 // know what (if anything) is blocking him.
 const NOW = {
-  claude: "Modal deployment unblocked: backend/modal_config.py rewritten — single autoci-secrets Secret (was 6 phantoms), pip_install_from_requirements path fixed to deploy from backend/, bge-small-en-v1.5 weights baked into image at build time so cold starts don't re-download 130 MB, and a second Modal function drain_inbound_queue scheduled every 2 minutes that calls inbound_processor.process_all_pending. Modal API surface verified against installed modal 1.4.2 (add_local_python_source, run_commands, Period all present). Charle still owes: deploy + Vercel NEXT_PUBLIC_API_URL + Edge Function RESEND_WEBHOOK_SECRET + smoke. Implementation work for the rest (B5/B6/B7/B8) continues separately.",
+  claude: "Modal LIVE — https://charlenator--autoci-backend-fastapi-app.modal.run. /health returned 200 in 18.5s on cold start. /chat/query 'Java TTF' returned 83.3 days + the 3 underlying hire records via B-evidence — full Modal → FastAPI → Supabase → DeepSeek → bge-small → SQL stack working. drain_inbound_queue scheduled every 2 min. Charle's hand-off: set NEXT_PUBLIC_API_URL on Vercel to that URL, redeploy frontend, then send a test email to confirm the inbound flow. RESEND_WEBHOOK_SECRET already set. Implementation work for B5 / B6 / B7 / B8 continues separately.",
   charle: "Two optional parallel tasks (non-blocking): (1) Set RESEND_WEBHOOK_SECRET on Supabase Edge Function secrets (Step 5 below). (2) Generate more CV variety if you want edge cases to test. Otherwise just chill until next session — fresh context, clean state.",
 };
 
@@ -186,13 +186,14 @@ const SPRINTS = [
     id: "D",
     label: "Deploy + submit",
     status: "in_progress",
-    progress: 0.25,
+    progress: 0.6,
     substeps: [
       { id: "D1", label: "Vercel frontend deploy (auto on push)", status: "in_progress" },
-      { id: "D2", label: "Modal backend deploy — modal_config.py rewritten (single autoci-secrets, weights baked into image, scheduled drain_inbound_queue every 2 min)", status: "in_progress" },
+      { id: "D2", label: "Modal backend deploy — LIVE at https://charlenator--autoci-backend-fastapi-app.modal.run; /health 200; /chat/query verified end-to-end (Java TTF returns 83.3 days + B-evidence rows)", status: "done" },
       { id: "D3", label: "Edge Function deploy + Resend webhook URL", status: "done" },
-      { id: "D4", label: "Set NEXT_PUBLIC_API_URL on Vercel + RESEND_WEBHOOK_SECRET on Edge Function", status: "pending" },
-      { id: "D5", label: "Prod smoke test (chat + real email round-trip)", status: "pending" },
+      { id: "D4-vercel", label: "Set NEXT_PUBLIC_API_URL=https://charlenator--autoci-backend-fastapi-app.modal.run on Vercel + redeploy", status: "pending" },
+      { id: "D4-edge", label: "Set RESEND_WEBHOOK_SECRET on Supabase Edge Function", status: "done" },
+      { id: "D5", label: "Prod smoke test — chat tab from Vercel hits Modal; one real Resend email round-trip flips to processed via drain_inbound_queue", status: "pending" },
       { id: "D6", label: "Submission deliverables", status: "pending" },
     ],
   },
@@ -201,6 +202,7 @@ const SPRINTS = [
 // ---------- Changelog (most recent first) ----------
 // kind: 'shipped' | 'progress' | 'cut' | 'decision' | 'infra'
 const CHANGELOG = [
+  { date: "2026-05-03", kind: "shipped", text: "Modal backend LIVE at https://charlenator--autoci-backend-fastapi-app.modal.run. Two Modal functions registered: fastapi_app (public asgi_app) and drain_inbound_queue (scheduled every 2 minutes). End-to-end smoke verified on the URL — /health 200 in 18.5s on cold start, /chat/query for Java TTF returned 83.3 days + the 3 underlying hire records via B-evidence. Required two iterations on modal_config.py: (1) Modal 1.4 deprecation fixes — container_idle_timeout → scaledown_window, allow_concurrent_inputs=N → @modal.concurrent(max_inputs=N). (2) Pre-installed CPU-only torch from https://download.pytorch.org/whl/cpu *before* pip_install_from_requirements, so pip's default Linux resolution stops pulling the entire NVIDIA CUDA toolkit (~5 GB). Resulting image is ~1.5 GB lighter and builds in ~1 minute total. Charle's remaining hand-off: set NEXT_PUBLIC_API_URL on Vercel + redeploy + real-email smoke test." },
   { date: "2026-05-03", kind: "shipped", text: "Modal deployment unblocked — backend/modal_config.py rewritten end-to-end. Three fixes: (1) replaced six phantom Secret.from_name calls with the single autoci-secrets Secret that's already provisioned. (2) Switched pip_install_from_requirements to a path that resolves when running `cd backend && modal deploy modal_config.py`, plus added .add_local_python_source('main', 'api') so the FastAPI app + every route + every agent + the inbound worker land in the container. (3) Added .run_commands() to bake the BAAI/bge-small-en-v1.5 weights into the image at build time — cold starts now skip the ~130 MB download. ALSO added a second Modal entry-point: drain_inbound_queue, schedule=modal.Period(minutes=2), calling inbound_processor.process_all_pending(). With the B4 stub in place it's enough to demo the inbound flow end-to-end on prod; B5 fills the real classifier/extractor body separately. Modal API surface verified against the installed modal 1.4.2." },
   { date: "2026-05-03", kind: "shipped", text: "B-aug shipped — Query Planner JSON envelope gains needs_live_search + live_search_sources + live_search_topic. The sanitizer auto-fills sources to all three when the planner forgets, defaults the topic to the original query, and forces needs_rag=true so the augmented corpus actually gets read. chat.py adds a step before SQL/RAG: instantiate ResearchAgent, call live_augment(topic, sources), the agent fans out to Tavily/News/Adzuna and persists results via upsert(...ignore_duplicates=True) on both corpus_chunks (on_conflict=content_hash) and adzuna_postings (on_conflict=adzuna_id). The chat response now carries a live_search dict the QueryTransformationCard renders as a per-source count line in the 'What we ran' block. Closes the brief's 'trigger live web search when the question implies recent / current data' gap." },
   { date: "2026-05-03", kind: "shipped", text: "B-evidence shipped — SQLTemplate gains optional build_evidence(); ExecutorResult carries evidence_sql + evidence_rows + evidence_error; chat.py forwards them; Citation drawer renders an expandable 'Source records (N)' section under the aggregate, with its own Source SQL toggle. Wired for time_to_fill, offer_acceptance_rate, conversion_rate, kpis_for_role, pipeline_volume_by_stage. Already-record-level templates (candidate_search_by_skill, candidate_by_email, industry_benchmark_for_role) intentionally have no evidence path. Unit-test coverage added in test_all.py. Closes Charle's last ask before the prior handoff." },
