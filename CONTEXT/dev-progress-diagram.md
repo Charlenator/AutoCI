@@ -3,6 +3,7 @@
 > **Purpose**: development-tracking diagram showing every node (UI, agent, route, table, external API, storage, deploy target) grouped logically, with status (✅ Done / ⚙️ In progress / 📋 TODO) and relative effort estimate per TODO node.
 > **Update cadence**: every time a node moves status. Keep this open during work sessions.
 > **Effort scale (project-scoped)**: XS / S / M / L / XL anchored to shipped work — see `memory/feedback_estimates.md` or the rubric in §3 below.
+> **Companion docs**: `plan-of-record.md` (the plan) · `ROADMAP.md` (cuts + post-MVP wishlist).
 
 ---
 
@@ -77,9 +78,7 @@ graph TB
         K6["K6 Improve (+ linked_root_cause)<br/>⚙️ [XS] update prompt"]:::wip
         K7_RET["K7 Control / Kanban<br/>📋 retire [XS]"]:::todo
         K_WRITE["K_WRITEUP<br/>✅"]:::done
-        K_PARETO["Pareto agent + chart<br/>📋 [S]"]:::todo
         K_FMEA["FMEA agent + table<br/>📋 [M]"]:::todo
-        K_RACI["RACI agent + matrix<br/>📋 [S]"]:::todo
     end
 
     subgraph BE_TOOLS [" 🔧 Backend Tools / Middleware"]
@@ -114,7 +113,6 @@ graph TB
         DB_EMAIL_RAG["rag_email_summaries<br/>📋 [S]"]:::todo
         DB_EVT_SUM["event_summaries<br/>📋 [S]"]:::todo
         DB_INTV_TBL["interventions<br/>📋 [S]"]:::todo
-        DB_LOGS["system_logs<br/>📋 [S]"]:::todo
         DB_RPC["match_chunks RPC (+ confidentiality filter)<br/>⚙️ [XS]"]:::wip
     end
 
@@ -164,9 +162,7 @@ graph TB
     K_SEL --> O2_NEW
     O2_NEW --> D1
     O2_NEW --> K1
-    O2_NEW --> K_PARETO
     O2_NEW --> K_FMEA
-    O2_NEW --> K_RACI
     E_RESEND -.inbound webhook.-> EF_INBOUND
     EF_INBOUND --> EF_CV_CLS
     EF_INBOUND --> EF_CV_EXT
@@ -196,10 +192,10 @@ graph TB
 | Frontend | QueryTransformationCard | 📋 | S | 5 | New SSE event consumer |
 | Frontend | CitationDrawer | 📋 | M | 5 | Source-type-aware rendering |
 | Frontend | KnowledgeSourcesPanel | 📋 | S | 5 | Inventory view |
-| Frontend | CandidateSearch tab | 📋 | M | 6 | Search + JD-paste + table |
+| Frontend | CandidateSearch tab | 📋 | M | 6 | Free-text search + table (JD-paste fan-out → ROADMAP) |
 | Frontend | SlotGrid | 📋 | M | 6 | 14-day cal.com slot grid |
 | Frontend | CIS tab | 📋 | M | 7 | Scope chat + tool selector + run |
-| Frontend | InterventionsTable (per + cross) | 📋 | S | 7 | Replaces Kanban |
+| Frontend | InterventionsTable (per-Kaizen) | 📋 | S | 7 | Replaces Kanban (cross-Kaizen view → ROADMAP) |
 | Frontend | KPI tile row | ✅ | — | 2 | |
 | Frontend | Writeup card + citation chips | ✅ | — | 4 | wave A |
 | Frontend | Ask-mode UI | ✅ | — | 4 | wave A |
@@ -239,9 +235,7 @@ graph TB
 | CIS Tools | K6 Improve | ⚙️ | XS | 7 | Add `linked_root_cause` |
 | CIS Tools | K7 Control / Kanban | 📋 retire | XS | 7 | Delete |
 | CIS Tools | K_WRITEUP | ✅ | — | 4 | |
-| CIS Tools | Pareto agent + chart | 📋 | S | 7 | New |
-| CIS Tools | FMEA agent + table | 📋 | M | 7 | New |
-| CIS Tools | RACI agent + matrix | 📋 | S | 7 | New |
+| CIS Tools | FMEA agent + table | 📋 | M | 7 | Closes "verified output" framing |
 | Tools | T1 MCP Analytics | ✅ | — | — | |
 | Tools | T2 Validation Interceptor | ✅ | — | — | |
 | Tools | T3 LiteLLM Router | ✅ | — | 1 | USD pricing live |
@@ -259,7 +253,6 @@ graph TB
 | DB | rag_email_summaries | 📋 | S | 6 | |
 | DB | event_summaries | 📋 | S | 6 | |
 | DB | interventions | 📋 | S | 7 | |
-| DB | system_logs | 📋 | S | 5 | |
 | Edge | inbound-email handler | 📋 | L | 6 | The big one — full pipeline |
 | Edge | CV classifier | 📋 | S | 6 | |
 | Edge | CV extractor | 📋 | M | 6 | pypdf + DeepSeek |

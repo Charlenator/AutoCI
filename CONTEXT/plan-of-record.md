@@ -1,8 +1,9 @@
 # AutoCI — Plan of Record
 
 > **Effective**: 2026-05-03 (replaces `please-read-context-plan-fluffy-bentley.md` — archived under `CONTEXT/archive/`).
+> **Companion docs**: `CONTEXT/dev-progress-diagram.md` (live status of every node) · `CONTEXT/ROADMAP.md` (post-MVP wishlist + presentation future-work source).
 > **Working rule (project-scoped)**: relative effort estimates only (XS / S / M / L / XL). No time-based estimates. Sizes are anchored to shipped work — see the t-shirt rubric in the dev-progress diagram or memory.
-> **Working rule (project-scoped)**: hard scope discipline. Anything that doesn't enhance the product OR close a literal challenge-brief requirement gets cut. Quick wins are welcome; large features are not unless strictly needed.
+> **Working rule (project-scoped)**: hard scope discipline. Anything that doesn't enhance the product OR close a literal challenge-brief requirement gets cut into `ROADMAP.md`, not deleted. Quick wins are welcome; large features are not unless strictly needed.
 
 ---
 
@@ -27,15 +28,25 @@ Cloud deploy is mandatory: Vercel (frontend) + Modal (backend) + Supabase Edge F
 ## 2. 2026-05-03 Final Scope Alignment — change summary
 
 ### REMOVED (deliberate scope cuts — were over-scoped or not in challenge requirements)
-- ❌ **Interview Prep tab** (CV–JD matching, fit scoring, scheduling UI as a standalone tab) — fully removed. The CV/JD matching capability survives differently: as part of Candidate Search (paste-JD-to-find-candidates) and as part of the inbound CV pipeline.
+- ❌ **Interview Prep tab** (CV–JD matching, fit scoring, scheduling UI as a standalone tab) — fully removed. The CV/JD matching capability survives differently: as part of Candidate Search and as part of the inbound CV pipeline.
 - ❌ **Kanban board** in Control phase — replaced by interventions table.
 - ❌ **Company policies / fake reference documents** — not needed; existing tables + new candidate/email/event vectorization is enough structured content for ≥3.
 - ❌ **Manual "Run CV Pipeline" button** — pipeline is fully webhook-driven.
 - ❌ **Email "Index" button** — indexing happens inside the inbound webhook.
 - ❌ **Google Calendar API path** — replaced by cal.com.
 - ❌ **Gmail API path (OAuth, drafts, etc.)** — replaced by Resend.
-- ❌ **Three-layer RAG self-check** (confidence-gated retry + numeric reasonableness) — kept *only* the citations layer; the retry + sanity layers are dropped because the validated-templates path already handles SQL accuracy and the cost/complexity isn't justified.
-- ❌ **Phase 4.5 T2.2 "Evidence Selector"** — deferred indefinitely (no demonstrated need; writeups already feel rich enough).
+
+### MOVED TO ROADMAP (post-MVP — see `CONTEXT/ROADMAP.md`)
+
+These were considered for current scope but cut on the 2026-05-03 sense check. They survive as candidates for post-deploy polish or the presentation's future-work slide.
+
+- ➡️ **RACI matrix tool** (cut from Phase 7) — not in brief; CIS already demos right-tool-for-job with FMEA.
+- ➡️ **Pareto analysis tool** (cut from Phase 7) — not in brief; visual nice-to-have.
+- ➡️ **Cross-Kaizen interventions view** (cut from Phase 7) — per-Kaizen view closes the requirement; portfolio-wide aggregation is polish.
+- ➡️ **`system_logs` middleware** (cut from Phase 5) — `agent_invocations` already covers the LLM side; don't build a parallel logging layer pre-emptively.
+- ➡️ **JD-paste fan-out search** (cut from Phase 6) — free-text semantic search alone closes the requirement.
+- ➡️ **Three-layer RAG self-check** (confidence retry + numeric reasonableness) — citations cover RAG traceability; validated SQL templates cover numeric accuracy.
+- ➡️ **Phase 4.5 T2.2 "Evidence Selector"** — no demonstrated need; revisit once corpora grow.
 
 ### CHANGED
 - 🔄 **Email tool** — now Resend (send) + Resend inbound webhook (receive) → Supabase Edge Function pipeline. CV classifier → field extraction → vectorize → Storage → confidentiality flag → dedup.
@@ -222,7 +233,6 @@ Each task tagged with relative effort (XS / S / M / L / XL). Anchors:
 | Query Transformation Card (frontend) | S | New SSE event `query_transformation`; renders parsed intent + chosen path. |
 | Citation Drawer | M | New component; handles RAG / SQL / Adzuna / Tavily / News / writeup-node sources. Adzuna shows `redirect_url`; CV chunks show download link. |
 | Knowledge Sources Panel | S | New `/sources` endpoint; lists corpora with chunk counts + tables with row counts + sample. |
-| `system_logs` table + middleware | S | Centralized request/agent log. |
 | Findings table + Impact/Effort table (UI tables, not prose) | S | Replaces prose lines in detection/improve outputs. |
 | Drop frontend Kanban code (not yet replaced) | XS | Delete-only; replacement in Phase 7. |
 
@@ -241,8 +251,7 @@ Each task tagged with relative effort (XS / S / M / L / XL). Anchors:
 | `/simulate-inbound` endpoint | S | Replays a webhook payload locally for dev. |
 | Resend send wrapper | XS | Thin Python wrapper. |
 | cal.com slot lookup wrapper | S | Free-tier API client. Returns 14-day slot grid. |
-| Candidate Search interface | M | New tab/route. Search bar + JD-paste mode + table + filters + download link + CSV export. |
-| JD-paste → key-requirement extraction → fan-out vector search | S | Translation agent extracts 3-5 requirements; runs 3-5 separate semantic queries; merges + ranks results. |
+| Candidate Search interface | M | New tab/route. Free-text semantic search bar + table + filters + download link + CSV export. (JD-paste fan-out → ROADMAP.) |
 | Schedule Meeting flow: slot grid + selection + Resend invite | M | UI grid + selection state + Resend send with deep-link booking URLs per slot. |
 | Test-CV generator prompt (handed to user, not built) | XS | Donna runs an LLM offline to produce 20-50 CVs; sends through `/simulate-inbound`. |
 
@@ -253,11 +262,8 @@ Each task tagged with relative effort (XS / S / M / L / XL). Anchors:
 | `K_SCOPING` agent + chat-loop endpoint | M | Asks clarifying questions until charter is clear. Emits `{problem, scope, requested_outcomes, confidence}`. |
 | `K_TOOL_SELECTOR` agent | S | Picks subset from `{D1, D2, D3, K1, K2, K3, K4, K5, K6, K7, Pareto, FMEA, RACI}` based on charter. Emits ordered tool list. |
 | Refactor `O2.run_full_kaizen` to consume tool list | M | Loops over selected tools; HITL gates between multi-phase tools (kept). |
-| Pareto analysis tool | S | New agent + bar-chart frontend component. |
-| FMEA tool | M | New agent emits Severity × Occurrence × Detection table. Frontend table + RPN sort. |
-| RACI tool | S | New agent emits per-intervention RACI matrix. Frontend mini-table. |
-| Interventions table — per-Kaizen view | S | Replaces Kanban. Includes `linked_root_cause` (mapped from K4/K5 by K6). |
-| Interventions table — cross-Kaizen view | S | New `/interventions` endpoint + frontend page. Filterable by KPI / role / Kaizen session. |
+| FMEA tool | M | New agent emits Severity × Occurrence × Detection table. Frontend table + RPN sort. (Closes "verified output" framing for the brief.) |
+| Interventions table — per-Kaizen view | S | Replaces Kanban. Includes `linked_root_cause` (mapped from K4/K5 by K6). (Cross-Kaizen aggregation → ROADMAP.) |
 | K6 prompt update — emit `linked_root_cause` per intervention | XS | Single prompt + dataclass change. |
 | Retire K7's Kanban output | XS | Delete + redirect output to interventions table. |
 | Rebrand UI: "Kaizen" → "Continuous Improvement Suite" | XS | Copy changes. |
@@ -312,9 +318,7 @@ Each task tagged with relative effort (XS / S / M / L / XL). Anchors:
 | `backend/api/routes/sources.py` | 5 | 📋 | NEW — `/sources` for Knowledge Sources Panel. |
 | `backend/api/agents/cis/k_scoping.py` | 7 | 📋 | NEW |
 | `backend/api/agents/cis/k_tool_selector.py` | 7 | 📋 | NEW |
-| `backend/api/agents/cis/pareto.py` | 7 | 📋 | NEW |
 | `backend/api/agents/cis/fmea.py` | 7 | 📋 | NEW |
-| `backend/api/agents/cis/raci.py` | 7 | 📋 | NEW |
 | `backend/api/routes/cis.py` | 7 | 📋 | NEW — `/cis/scope` + `/cis/run`. |
 | `backend/api/routes/candidates.py` | 6 | 📋 | NEW — search + CV download + schedule. |
 | `backend/api/routes/inbound.py` | 6 | 📋 | NEW — `/simulate-inbound`. |
@@ -323,7 +327,6 @@ Each task tagged with relative effort (XS / S / M / L / XL). Anchors:
 | `supabase/functions/inbound-email/index.ts` | 6 | 📋 | NEW — Edge Function. |
 | `supabase/migrations/004_inbound_pipeline.sql` | 6 | 📋 | NEW — all new tables + columns + bucket + RPC update. |
 | `supabase/migrations/005_interventions.sql` | 7 | 📋 | NEW |
-| `supabase/migrations/006_system_logs.sql` | 5 | 📋 | NEW |
 | `vercel.json` + `modal_config.py` | 8 | 📋 | NEW / cleanup. |
 | `submission/README.md` + `submission/screenshots/` | 9 | 📋 | NEW |
 
@@ -334,17 +337,19 @@ Files retired:
 
 ---
 
-## 9. Out of scope (deliberate cuts, with reasoning)
+## 9. Out of scope (deliberate — see `CONTEXT/ROADMAP.md` for everything)
 
-- **Three-layer RAG self-check** (confidence retry + numeric reasonableness) — validated templates path covers SQL accuracy; citations cover RAG traceability. Retry/sanity layers add complexity for diminishing returns.
-- **Phase 4.5 T2.2 Evidence Selector** — writeups already cite well; no demonstrated need.
+The cuts above (RACI, Pareto, cross-Kaizen view, `system_logs`, JD-paste fan-out, three-layer self-check, T2.2 Evidence Selector) live in **`CONTEXT/ROADMAP.md`** with full reasoning + effort sizing. Other deliberate non-goals for the MVP:
+
 - **Authentication / multi-user isolation** — single-user demo; not required by brief.
 - **Mobile-responsive UI** — not required by brief.
 - **DBOS durability** — `threading.Thread` is sufficient.
 - **Embedded vector store outside Supabase** — pgvector inside Supabase is enough.
-- **Long-term log archival to S3** — Supabase logging only for now; S3 deferred.
-- **CV–JD match scoring as a standalone feature** — replaced by JD-paste mode inside Candidate Search.
+- **Long-term log archival to S3** — Supabase logging only for now.
+- **CV–JD match scoring as a standalone feature** — Candidate Search semantic search closes the requirement.
 - **Process map / SIPOC visual diagram** — overlaps with the global React Flow drawer.
+
+Anything we cut during build (anywhere in Phases 5-9) gets moved into `ROADMAP.md` with reasoning, not deleted. The roadmap doubles as the source for the presentation's future-work slide.
 
 ---
 
@@ -368,7 +373,7 @@ Files retired:
 
 - **Phase 5** — Visit new shell. Three tabs render. Right drawer visible and collapsible. Ask "what's our average TTF for Java Devs?" → Query Transformation Card shows template-match + chosen formula → answer renders with `[1]` citation chip → click chip → drawer opens with full source. Knowledge Sources Panel lists corpora + tables.
 - **Phase 6** — Send a real email with a CV PDF to the Resend inbound address. Within 30s a row appears in `inbound_emails`, `candidates`, and `cv_chunks`. CV PDF visible in Storage. Dedup confirmed (resend same email → flagged duplicate). Search "Java developer" in Candidate Search → seeded candidates surface in table; flags rendered. Click Schedule Meeting → 14-day slot grid loads → tick 3 slots → Send → candidate gets a Resend email with 3 booking deep-links.
-- **Phase 7** — In CIS: type "why is offer acceptance dropping for UX?" → K_SCOPING asks 1-2 clarifying questions → K_TOOL_SELECTOR proposes (e.g.) "D1 → D2 → K3 (5 Whys + Fishbone) → Pareto → FMEA → Interventions". Approve → run executes only those tools. Interventions table renders with linked root causes. Cross-Kaizen view lists this run alongside historical ones.
+- **Phase 7** — In CIS: type "why is offer acceptance dropping for UX?" → K_SCOPING asks 1-2 clarifying questions → K_TOOL_SELECTOR proposes (e.g.) "D1 → D2 → K3 (5 Whys + Fishbone) → FMEA → Interventions". Approve → run executes only those tools. Interventions table renders with `linked_root_cause` populated per row.
 - **Phase 8** — Visit Vercel URL. App loads. Fire a CIS run. SSE events stream from Modal. Send a real email. Edge Function processes it. No localhost references in DevTools.
 - **Phase 9** — `submission/README.md` exists, ≤2 pages. Screenshots present. Screen-record uploaded. Live URL works from a clean browser.
 
