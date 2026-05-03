@@ -17,8 +17,104 @@ import ReactFlow, {
 // Update each time work shifts. Keep both sides in sync — Charle should always
 // know what (if anything) is blocking him.
 const NOW = {
-  claude: "Sprint B1 done. Next up: B2 — Citation chip system + CitationDrawer (frontend + SSE event). Will need the Query Transformation Card stubbed too so the planner envelope renders.",
-  charle: "Nothing blocking. Optional: keep generating CV batches if you want richer test data — the pipeline can ingest them once Sprint B5 lands.",
+  claude: "Sprint B2 done — Chat tab is live. Plain Tailwind components per the simplicity rule, design-sprint-friendly. Next up: B3 — Knowledge Sources Panel + /sources route, then B4 inbound webhook handler. Pausing to let Charle test the new chat tab if he wants.",
+  charle: "Modal setup — full checklist below. Once done, also worth opening the Vercel preview URL after the next deploy and trying a few queries on the Chat tab (e.g. 'time to fill for Java Developers').",
+};
+
+// ---------- Charle's full checklist (rich HTML in `body`) ----------
+// Update `done: true` as steps complete so Charle can track progress. Set to
+// null to hide the panel entirely.
+const CHARLE_CHECKLIST = {
+  title: "Modal setup checklist",
+  status: "in progress",
+  intro: "Knock these out in parallel with Claude's B2 build. Once done, Claude will handle the actual <code>modal deploy</code> later in Sprint D2.",
+  steps: [
+    {
+      title: "Step 1 — Account + CLI auth",
+      meta: "5 min",
+      done: false,
+      body: `
+        <p>Activate the project venv, then authenticate the Modal CLI. Browser tab opens for sign-in / sign-up.</p>
+        <pre><code># activate venv
+& "C:/autoci-venv/Scripts/Activate.ps1"
+
+# confirm modal CLI is installed (already in requirements.txt; if not):
+pip install modal
+
+# auth — opens browser
+modal token new</code></pre>
+        <p>The token gets stashed in <code>~/.modal.toml</code>. No further wiring needed.</p>
+      `,
+    },
+    {
+      title: "Step 2 — Create the Modal Secret",
+      meta: "10 min",
+      done: false,
+      body: `
+        <p>Modal stores env vars in named "Secret" objects. Create <strong>one</strong> Secret called <code>autoci-secrets</code> with every key our backend needs. Pick whichever path is easier:</p>
+        <p><strong>Option A — via the web dashboard</strong> (recommended first time):</p>
+        <ol>
+          <li>Go to <a href="https://modal.com/secrets" target="_blank" rel="noopener">modal.com/secrets</a></li>
+          <li>Click <em>New Secret</em> → <em>Custom</em></li>
+          <li>Name: <code>autoci-secrets</code></li>
+          <li>Paste each key/value pair from your local <code>backend/.env</code>:</li>
+        </ol>
+        <pre><code>SUPABASE_URL
+SUPABASE_SERVICE_KEY
+DEEPSEEK_API_KEY
+OPENAI_API_KEY
+ADZUNA_APP_ID
+ADZUNA_API_KEY
+TAVILY_API_KEY
+NEWSAPI_KEY
+RESEND_API_KEY
+RESEND_WEBHOOK_SECRET
+CAL_COM_API_KEY
+CAL_COM_DEFAULT_EVENT_TYPE_ID
+CAL_COM_USERNAME</code></pre>
+        <p><strong>Option B — via CLI</strong> (faster, more typing):</p>
+        <pre><code>modal secret create autoci-secrets \`
+  SUPABASE_URL=https://orxdunrevazwpyzkoaob.supabase.co \`
+  SUPABASE_SERVICE_KEY=&lt;value from backend/.env&gt; \`
+  DEEPSEEK_API_KEY=&lt;value from backend/.env&gt; \`
+  OPENAI_API_KEY=&lt;value or placeholder&gt; \`
+  ADZUNA_APP_ID=6febb622 \`
+  ADZUNA_API_KEY=&lt;value from backend/.env&gt; \`
+  TAVILY_API_KEY=&lt;value from backend/.env&gt; \`
+  NEWSAPI_KEY=&lt;value from backend/.env&gt; \`
+  RESEND_API_KEY=&lt;value from backend/.env&gt; \`
+  RESEND_WEBHOOK_SECRET=&lt;value from backend/.env&gt; \`
+  CAL_COM_API_KEY=&lt;value from backend/.env&gt; \`
+  CAL_COM_DEFAULT_EVENT_TYPE_ID=5572588 \`
+  CAL_COM_USERNAME=charle-coetzee-b2wbir</code></pre>
+      `,
+    },
+    {
+      title: "Step 3 — (Optional but worth it) Real OpenAI key for embeddings",
+      meta: "5 min · ~$5",
+      done: false,
+      body: `
+        <p>Your current <code>OPENAI_API_KEY</code> is a placeholder, which means the embeddings tool falls back to zero-vectors. The 213 corpus chunks already in Supabase were generated with a real key — new chunks (CV chunks once B5 lands, plus any B3 retrieval test) need the same vector space to match.</p>
+        <p>Generate a key at <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com/api-keys</a>, then update <strong>both</strong>:</p>
+        <ul>
+          <li>Local <code>backend/.env</code> — replace <code>MISSING_NEEDED_FOR_T4_EMBEDDINGS</code> with the real key</li>
+          <li>Modal Secret <code>autoci-secrets</code> — same key</li>
+        </ul>
+        <div class="checklist-callout">~$5 of credit covers the entire demo. Skip if budget is tight; vector search will silently return zero-similarity results (RAG path becomes near-useless but the pipeline still runs).</div>
+      `,
+    },
+    {
+      title: "Step 4 — Confirm + report back",
+      meta: "30 sec",
+      done: false,
+      body: `
+        <p>Verify the secret is reachable:</p>
+        <pre><code>modal secret list</code></pre>
+        <p>You should see <code>autoci-secrets</code> with 13 keys (12 if you skipped the OpenAI step).</p>
+        <p>Reply in chat with "Modal ready" or paste the <code>modal secret list</code> output. Claude will then reference the <code>autoci-secrets</code> name in <code>modal_config.py</code> when Sprint D2 starts.</p>
+      `,
+    },
+  ],
 };
 
 // ---------- Sprint progress ----------
@@ -39,10 +135,10 @@ const SPRINTS = [
     id: "B",
     label: "Brief-required closures",
     status: "in_progress",
-    progress: 0.13,
+    progress: 0.25,
     substeps: [
       { id: "B1", label: "Query Planner + sql_templates + SQL exec + 4-layer safety", status: "done" },
-      { id: "B2", label: "Citation chip system + CitationDrawer", status: "pending" },
+      { id: "B2", label: "Citation chip system + CitationDrawer + QueryTransformationCard + ChatPanel", status: "done" },
       { id: "B3", label: "Knowledge Sources Panel + /sources route", status: "pending" },
       { id: "B4", label: "Edge Function (dumb pipe) + Modal worker scaffold", status: "pending" },
       { id: "B5", label: "Modal worker filling — classifier + extractor + confidentiality + vectorizer", status: "pending" },
@@ -82,6 +178,9 @@ const SPRINTS = [
 // ---------- Changelog (most recent first) ----------
 // kind: 'shipped' | 'progress' | 'cut' | 'decision' | 'infra'
 const CHANGELOG = [
+  { date: "2026-05-03", kind: "shipped", text: "Sprint B2 done — Chat tab is live. ChatPanel + CitationChip + Citation + CitationDrawer + QueryTransformationCard components shipped, wired to POST /chat/query. Plain Tailwind per the simplicity rule; design pass will repaint." },
+  { date: "2026-05-03", kind: "decision", text: "UI components stay simple + flexible until the dedicated design sprint. New project memory rule." },
+  { date: "2026-05-03", kind: "shipped", text: "Dev diagram: added Charle's-checklist panel with rich HTML + verbose Modal setup steps. Sidebar widened to 33vw + drag-resizable." },
   { date: "2026-05-03", kind: "shipped", text: "Sprint B1 done — Query Planner (LLM, schema-aware) + 8 validated SQL templates + thin SQL Executor + 4-layer SQL safety. Verified end-to-end: real TTF query returns 83.3 days for Senior Java Developer; DROP rejected at the DB by run_select_query." },
   { date: "2026-05-03", kind: "decision", text: "No emojis in user-facing UI. Existing nav + page placeholders rewritten to text-only." },
   { date: "2026-05-03", kind: "shipped", text: "Dev diagram: added Right-now panel + Sprint progress tracker (A/B/C/D with sub-step status)." },
@@ -436,6 +535,32 @@ function renderNow() {
   if (charle) charle.textContent = NOW.charle;
 }
 
+function renderChecklist() {
+  const intro = document.getElementById('checklist-intro');
+  const steps = document.getElementById('checklist-steps');
+  const status = document.getElementById('checklist-status');
+  const panel = document.getElementById('checklist-panel');
+
+  if (!CHARLE_CHECKLIST || !panel) {
+    if (panel) panel.style.display = 'none';
+    return;
+  }
+  panel.style.display = '';
+
+  if (intro) intro.innerHTML = CHARLE_CHECKLIST.intro || '';
+  if (status) status.textContent = CHARLE_CHECKLIST.status || '';
+  if (!steps) return;
+  steps.innerHTML = (CHARLE_CHECKLIST.steps || []).map((step, i) => `
+    <div class="checklist-step">
+      <div class="checklist-step-header">
+        <span class="checklist-step-title">${step.done ? '✓ ' : ''}${step.title}</span>
+        <span class="checklist-step-meta">${step.meta || ''}</span>
+      </div>
+      <div class="checklist-step-body">${step.body}</div>
+    </div>
+  `).join('');
+}
+
 function renderSprints() {
   const list = document.getElementById('sprint-list');
   if (!list) return;
@@ -486,5 +611,6 @@ function renderChangelog() {
 }
 
 renderNow();
+renderChecklist();
 renderSprints();
 renderChangelog();

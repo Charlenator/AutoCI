@@ -6,6 +6,7 @@ import Link from "next/link";
 
 export default function CISPage() {
   return (
+    <div className="h-full overflow-y-auto">
     <div className="max-w-5xl mx-auto px-6 py-12">
       <header className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
@@ -52,6 +53,7 @@ export default function CISPage() {
           description="Replaces Kanban. Each row links back to the root cause from Five Whys / Ishikawa that justifies it."
         />
       </section>
+    </div>
     </div>
   );
 }

@@ -30,10 +30,10 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-gray-50 text-gray-900">
+      <body className="h-full flex flex-col bg-gray-50 text-gray-900">
         <TopNav />
         <div className="flex flex-1 min-h-0">
-          <main className="flex-1 min-w-0 overflow-y-auto">{children}</main>
+          <main className="flex-1 min-w-0 min-h-0 overflow-hidden">{children}</main>
           <RightDrawer />
         </div>
       </body>
