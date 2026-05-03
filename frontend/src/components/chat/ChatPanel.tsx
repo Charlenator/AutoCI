@@ -159,7 +159,7 @@ export default function ChatPanel() {
               placeholder="Ask about the recruitment pipeline. e.g. 'What's our average time to fill for Java Developers?'"
               rows={2}
               disabled={pending}
-              className="flex-1 resize-none rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50"
+              className="text-black placeholder:text-gray-800 flex-1 resize-none rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50"
             />
             <button
               type="button"
