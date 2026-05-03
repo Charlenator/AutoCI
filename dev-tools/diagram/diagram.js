@@ -17,8 +17,8 @@ import ReactFlow, {
 // Update each time work shifts. Keep both sides in sync — Charle should always
 // know what (if anything) is blocking him.
 const NOW = {
-  claude: "🛏️ End-of-session handoff. Today: Sprints A1, A2, B1, B2 (+polish), B3, B4 + embedding switch + corpus dedup all shipped + pushed. Migration 007 deduped corpus_chunks (213 → 79) + UNIQUE constraint blocks future dupes. SESSION_RESUME.md updated with full handoff. Next session continues with B5 — fill the Modal worker with the real classifier / extractor / confidentiality / vectorizer + section-based smart chunking. NEW item just added: B-aug (live search augmentation in chat) — see plan-of-record.",
-  charle: "Two open parallel tasks (both optional / non-blocking): (1) Set RESEND_WEBHOOK_SECRET on Supabase Edge Function secrets (Step 5 below). (2) Generate more CV variety if 20 doesn't feel like enough for edge-case testing. Otherwise just chill until next session.",
+  claude: "🛏️ End-of-session handoff. Today: Sprints A1/A2/B1/B2(+polish)/B3/B4 + embedding switch + migration 007 corpus dedup all shipped + pushed. SESSION_RESUME.md rewritten with the full handoff. Next-session priority order: (1) B-evidence — show *underlying source rows* in the Citation Drawer (Charle's last ask before handoff). (2) B-aug — live search augmentation in chat path. (3) B5 — fill the Modal worker. (4) B6/B7/B8.",
+  charle: "Two optional parallel tasks (non-blocking): (1) Set RESEND_WEBHOOK_SECRET on Supabase Edge Function secrets (Step 5 below). (2) Generate more CV variety if you want edge cases to test. Otherwise just chill until next session — fresh context, clean state.",
 };
 
 // ---------- Charle's full checklist (rich HTML in `body`) ----------
@@ -198,6 +198,7 @@ const SPRINTS = [
 // ---------- Changelog (most recent first) ----------
 // kind: 'shipped' | 'progress' | 'cut' | 'decision' | 'infra'
 const CHANGELOG = [
+  { date: "2026-05-03", kind: "decision", text: "B-evidence added to plan (next-session priority): templates get an optional build_evidence() that returns the *underlying source rows* (the 3 hires that produced the 83.3-day average), not just the aggregate. Citation Drawer renders both. Stronger 'source traceability' demo." },
   { date: "2026-05-03", kind: "decision", text: "B-aug added to plan: live-search augmentation in chat path. Currently S4 is Kaizen-only; chat questions about current market data get stale answers. Next session item." },
   { date: "2026-05-03", kind: "shipped", text: "Migration 007: dedup corpus_chunks (213 → 79 rows; 134 dupes from re-vectorization on every Kaizen run) + UNIQUE content_hash index to block future dupes. CV chunks remain per-candidate distinguishable via metadata->>'candidate_id' in the dedup key." },
   { date: "2026-05-03", kind: "shipped", text: "B2 polish: chat reply now LLM-rewritten into natural language, Query Transformation Card collapsed-by-default with three labelled blocks (Your query / What we ran / Exact query)." },
