@@ -1,18 +1,68 @@
 # SESSION RESUME — handoff between Claude Code sessions
 
-> ## ⚠️ 2026-05-03 PIVOT — READ THIS FIRST
+> ## ⚠️ 2026-05-03 evening — READ THIS FIRST
 >
-> The plan changed materially on 2026-05-03. The new plan-of-record lives at **`CONTEXT/plan-of-record.md`**. The old plan (`please-read-context-plan-fluffy-bentley.md`) has been archived under `CONTEXT/archive/`.
+> Big productive session. Sprints A1, A2, B1, B2 (+ polish), B3, B4 all shipped + pushed to main. Migrations 004 / 005 / 006 / 007 applied. Embedding stack switched off OpenAI (free local bge-small-en-v1.5). Edge Function v2 + Modal-worker-scaffold + /inbound/* routes + KnowledgeSourcesPanel + Citation Drawer + Query Transformation Card all live.
 >
-> Active dev tracking lives at **`CONTEXT/dev-progress-diagram.md`** — grouped mermaid diagram + status table for every node (UI / agent / route / table / external API / deploy target). Update it as nodes move from 📋 → ⚙️ → ✅.
+> **Project files for the next session to read first**:
+> - `CONTEXT/plan-of-record.md` — phases B5 → D5 still ahead. Ignore phases marked ✅ in the status table.
+> - `CONTEXT/dev-progress-diagram.md` — node-level status. Open `dev-tools/diagram/index.html` with VS Code Live Server for the rich UI: NOW panel, Charle's checklist, sprint progress, changelog.
+> - `CONTEXT/ROADMAP.md` — cuts that may circle back; presentation future-work source.
+> - `CONTEXT/presentation_prep.md` — Q&A pre-emption talking points; grow during build.
+> - This file's own pivot history below for backstory.
 >
-> Working rules now in force (project-scoped):
-> - **Effort estimates only** — XS/S/M/L/XL anchored to shipped work. No time-based estimates.
-> - **Hard scope discipline** — cut anything that doesn't enhance the product or close a literal challenge-brief requirement. Quick wins welcome; large features only if strictly needed.
+> **Memory to honour (auto-loaded if present in `~/.claude/projects/.../memory/`)**:
+> - `project_owner.md` — Charle's project; Donna may help. Default git identity = Charle Coetzee.
+> - `feedback_estimates.md` — XS/S/M/L/XL only, no time estimates.
+> - `feedback_commit_cadence.md` — logical-unit commits; pushes can be frequent for visibility-critical work.
+> - `feedback_ui_labels.md` — natural language first, jargon in brackets.
+> - `feedback_no_emojis_in_ui.md` — emojis OK in dev tooling, not in user-facing UI.
+> - `feedback_ui_simplicity.md` — plain Tailwind + prop-driven; design sprint comes later.
+> - `project_no_langchain.md` — direct LiteLLM stays.
 >
-> The 🔥 "Tomorrow's first-up" bucket below is **superseded** by the new plan. Items 1-3 are absorbed into Phases 5/7 of the new plan; item 4 (Ask doesn't redirect chat) is a minor bug to retest after the Phase 5 chat tab redesign. Read `plan-of-record.md` for the full picture.
+> ## What's next (priority-ordered)
 >
-> Everything below this banner is **historical** (2026-05-02 state). Useful as backstory; not the current plan.
+> 1. **B5 (in flight) — fill the Modal worker.** Today shipped the *scaffold* (`backend/api/workers/inbound_processor.py`); the body still does a stub classifier on MIME type. Next session needs:
+>    - S5 CV classifier agent (DeepSeek "is this a CV?" call)
+>    - S6 CV extractor (`python-docx` text extraction → DeepSeek field extraction → normalized JSON)
+>    - S7 Confidentiality classifier
+>    - Section-based smart-chunking (per the plan-of-record locked decision: identity / skills / summary / per-job / education chunks per CV)
+>    - Email vectorizer for non-CV inbound mail
+>    - Wire all of these into `process_pending_email`
+>    - Test via `/inbound/simulate` with one of Charle's 20 generated `.docx` CVs from `dev-tools/cv_generator/output/`
+> 2. **B-aug (NEW, just added)** — live-search augmentation in the chat path. Currently S4 is Kaizen-only; chat questions like "current market salaries" get stale data. Add a `needs_live_search` flag to the Query Planner envelope; when set, chat.py calls S4 → chunks → embeds → upserts → re-retrieves. Migration 007's UNIQUE constraint makes the upsert path safe.
+> 3. **B6 — Resend send wrapper.** Thin Python client.
+> 4. **B7 — cal.com slot lookup wrapper.** Free-tier API, spike-verified 2026-05-03.
+> 5. **B8 — Candidate Search interface + Schedule Meeting flow.** Largest remaining UI piece.
+> 6. **Sprint C** — CIS rebrand + interventions table + FMEA tool + React Flow drawer.
+> 7. **Sprint D** — deploy (Vercel auto-deploys; Modal needs `modal_config.py` build-out).
+> 8. **Sprint 9** — submission deliverables.
+>
+> ## Open parallel tasks for Charle (not blocking)
+>
+> - **Set `RESEND_WEBHOOK_SECRET`** on Supabase Edge Function secrets (dashboard → project → Edge Functions → Secrets, value `whsec_uUNBFija+ogyvI9AgUqXZehpDureNVo+`). Without it, the Edge Function still runs but skips signature verification with a logged warning. See dev diagram checklist Step 5.
+> - Optional: more CV variety in `dev-tools/cv_generator/` if 20 isn't enough for testing edge cases.
+>
+> ## State of the live URL
+>
+> Vercel auto-deploys frontend on every push. Backend is **not** deployed (Modal happens at Sprint D2). To exercise the chat tab end-to-end, run the backend locally — see Charle's local-dev recipe in chat history (uvicorn on :8000 + npm run dev on :3000).
+>
+> ## What landed today (high level)
+>
+> | Sprint | What | Notes |
+> |---|---|---|
+> | A1 | Migration 004 — inbound_emails + extended candidates + corpus_chunks.confidential + match_chunks RPC + cv-attachments bucket | applied via MCP |
+> | A2 | 3-tab shell skeleton — TopNav + RightDrawer + /, /candidates, /cis routes | text-only labels per no-emoji rule |
+> | B1 | S1 Query Planner + 8 validated SQL templates + thin SQL Executor + 4-layer SQL safety | run_select_query RPC validates SELECT-only at DB |
+> | B2 | Citation chips + CitationDrawer + Query Transformation Card + ChatPanel | live chat tab wired to /chat/query |
+> | B2 polish | Natural-language reply pass + collapsible 3-block QTC | answer reads like a sentence not a key=value dump |
+> | (mid) | Embedding switch — OpenAI ada-002 (1536-d) → BAAI/bge-small-en-v1.5 (384-d) | free, local, no API key; 213 chunks re-embedded |
+> | B3 | /sources route + KnowledgeSourcesPanel modal | closes "≥3 structured documents visibility" requirement |
+> | B4 | Edge Function v2 (signature verify + dedup + Storage upload + queue insert) + Modal worker scaffold + /inbound/simulate + /trigger + /drain | end-to-end smoke tested |
+> | (closeout) | Migration 007 — dedup corpus_chunks (213 → 79 rows) + UNIQUE content_hash | prevents future re-vectorization dupes |
+> | (docs) | CONTEXT/presentation_prep.md seeded with 7 Q&A talking points | grow during build |
+>
+> Everything below this banner is **historical** (pre-2026-05-03 state). Useful as backstory; not the current plan.
 
 ---
 

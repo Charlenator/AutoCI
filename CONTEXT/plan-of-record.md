@@ -249,6 +249,7 @@ Each task tagged with relative effort (XS / S / M / L / XL). Anchors:
 | Citation Drawer | M | New component; handles RAG / SQL / Adzuna / Tavily / News / writeup-node sources. Adzuna shows `redirect_url`; CV chunks show download link. |
 | Knowledge Sources Panel | S | New `/sources` endpoint; lists corpora with chunk counts + tables with row counts + sample. |
 | Findings table + Impact/Effort table (UI tables, not prose) | S | Replaces prose lines in detection/improve outputs. |
+| **B-aug — Live-search augmentation in chat** (NEW 2026-05-03 evening) | M | Query Planner gets a new `needs_live_search` flag (and optional source list: tavily / news / adzuna). When set: chat.py calls S4, results are chunked + embedded + INSERT-on-conflict-do-nothing'd into `corpus_chunks` (the unique constraint from migration 007 makes this safe), then S2 RAGAgent re-retrieves from the now-augmented corpus. Closes the brief's "trigger live search when the question implies recent / current data" gap. Heuristic + LLM-based decision. Worth wiring an SSE-like progress hint to the frontend so users see "Searching the web..." during the API round-trip. |
 | Drop frontend Kanban code (not yet replaced) | XS | Delete-only; replacement in Phase 7. |
 
 ### Phase 6 — Email pipeline (Resend) + Calendar (cal.com) + CV ingestion

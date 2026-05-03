@@ -227,6 +227,9 @@ CREATE TABLE corpus_chunks (
     metadata JSONB DEFAULT '{}',    -- e.g., {"candidate_id": "...", "role": "Java Developer"}
     embedding VECTOR(384),           -- Migration 006: BAAI/bge-small-en-v1.5 (was VECTOR(1536) on OpenAI ada-002)
     confidential BOOLEAN DEFAULT false, -- Migration 004: filtered out by match_chunks RPC by default
+    content_hash TEXT GENERATED ALWAYS AS (
+        md5(corpus_name || '::' || chunk_text || '::' || COALESCE(metadata->>'candidate_id', ''))
+    ) STORED,                         -- Migration 007: dedup key, enforced by UNIQUE index below
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -284,6 +287,7 @@ CREATE INDEX idx_agent_invocations_session ON agent_invocations(session_id);
 -- RAG vector search (cosine similarity is default but we can specify)
 CREATE INDEX idx_corpus_embedding ON corpus_chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
 CREATE INDEX idx_corpus_chunks_confidential ON corpus_chunks(confidential) WHERE confidential = false;
+CREATE UNIQUE INDEX corpus_chunks_content_hash_uniq ON corpus_chunks(content_hash); -- Migration 007
 
 -- Migration 004 indexes
 CREATE INDEX idx_candidates_email ON candidates(email);

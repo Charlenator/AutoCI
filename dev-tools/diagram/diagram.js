@@ -17,8 +17,8 @@ import ReactFlow, {
 // Update each time work shifts. Keep both sides in sync — Charle should always
 // know what (if anything) is blocking him.
 const NOW = {
-  claude: "Sprint B4 done — Edge Function v2 deployed (signature verify + dedup + attachment upload + queue insert), Modal worker scaffold (process_pending_email) verified end-to-end, /inbound/simulate + /inbound/trigger + /inbound/drain routes for local-dev testing. Next: B5 — fill the worker with real classifier / extractor / confidentiality / vectorizer + section-based smart chunking.",
-  charle: "ONE small parallel task: set RESEND_WEBHOOK_SECRET on Supabase Edge Function secrets so signature verification activates. See checklist panel for the exact command. Without this, the Edge Function still works (just skips signature verification with a warning log).",
+  claude: "🛏️ End-of-session handoff. Today: Sprints A1, A2, B1, B2 (+polish), B3, B4 + embedding switch + corpus dedup all shipped + pushed. Migration 007 deduped corpus_chunks (213 → 79) + UNIQUE constraint blocks future dupes. SESSION_RESUME.md updated with full handoff. Next session continues with B5 — fill the Modal worker with the real classifier / extractor / confidentiality / vectorizer + section-based smart chunking. NEW item just added: B-aug (live search augmentation in chat) — see plan-of-record.",
+  charle: "Two open parallel tasks (both optional / non-blocking): (1) Set RESEND_WEBHOOK_SECRET on Supabase Edge Function secrets (Step 5 below). (2) Generate more CV variety if 20 doesn't feel like enough for edge-case testing. Otherwise just chill until next session.",
 };
 
 // ---------- Charle's full checklist (rich HTML in `body`) ----------
@@ -198,6 +198,9 @@ const SPRINTS = [
 // ---------- Changelog (most recent first) ----------
 // kind: 'shipped' | 'progress' | 'cut' | 'decision' | 'infra'
 const CHANGELOG = [
+  { date: "2026-05-03", kind: "decision", text: "B-aug added to plan: live-search augmentation in chat path. Currently S4 is Kaizen-only; chat questions about current market data get stale answers. Next session item." },
+  { date: "2026-05-03", kind: "shipped", text: "Migration 007: dedup corpus_chunks (213 → 79 rows; 134 dupes from re-vectorization on every Kaizen run) + UNIQUE content_hash index to block future dupes. CV chunks remain per-candidate distinguishable via metadata->>'candidate_id' in the dedup key." },
+  { date: "2026-05-03", kind: "shipped", text: "B2 polish: chat reply now LLM-rewritten into natural language, Query Transformation Card collapsed-by-default with three labelled blocks (Your query / What we ran / Exact query)." },
   { date: "2026-05-03", kind: "shipped", text: "Sprint B4 done — Edge Function v2 deployed (signature verify + svix-id dedup + Storage upload + queue insert), Modal worker scaffold (process_pending_email) verified end-to-end, /inbound/simulate + /inbound/trigger + /inbound/drain routes for local-dev testing." },
   { date: "2026-05-03", kind: "shipped", text: "Sprint B3 done — /sources route + KnowledgeSourcesPanel modal. Live data: 6 corpora, 213 chunks, 10 surfaced SQL tables, ~830+ rows. Closes the '≥3 structured documents visibility' brief requirement." },
   { date: "2026-05-03", kind: "shipped", text: "CONTEXT/presentation_prep.md seeded — Q&A pre-emption doc with the LangChain framing, embedding choice, DeepSeek choice, pgvector choice, SQL injection answer, HITL rationale. Grow as more decisions land." },
