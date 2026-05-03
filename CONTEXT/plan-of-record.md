@@ -155,10 +155,13 @@ Modal Python worker  (polls pending rows → heavy processing)
 
 Supabase  (DB + Storage)
 ├── Existing 11 tables (kept)
-├── NEW: inbound_emails, candidates*, cv_chunks, jd_chunks, rag_email_summaries,
-│        event_summaries, interventions, system_logs
-├── NEW: cv-attachments storage bucket
-└── pgvector + match_chunks RPC (filter on confidentiality)
+├── NEW: inbound_emails, interventions
+├── EXTENDED: candidates (CV-driven applicant cols), corpus_chunks (+confidential col)
+├── NEW: cv-attachments storage bucket (private)
+└── pgvector + match_chunks RPC (now filters on confidentiality)
+    Note: CVs / JDs / email summaries / event summaries all live as rows in the
+    *single* corpus_chunks table, distinguished by corpus_name + metadata JSONB.
+    Simplifies the vector index, the RPC, and the citation rendering path.
 
 External APIs
 ├── Resend (send + inbound webhook)
@@ -252,7 +255,7 @@ Each task tagged with relative effort (XS / S / M / L / XL). Anchors:
 
 | Task | Effort | Notes |
 |---|---|---|
-| Schema migrations: `inbound_emails` (with `status` column), extend `candidates`, `cv_chunks`, `jd_chunks`, `rag_email_summaries`, `event_summaries`, `cv-attachments` storage bucket, `confidential` columns | M | Single migration file. |
+| Schema migration 004 — `inbound_emails` table; extend `candidates` (name/email/phone/skills/cv_storage_path/dedup/missing/confidential); add `corpus_chunks.confidential`; update `match_chunks` RPC with `include_confidential` param; create `cv-attachments` storage bucket | ✅ M | **Applied 2026-05-03 via Supabase MCP.** Unified corpus design — CVs/JDs/email summaries all live in `corpus_chunks` distinguished by `corpus_name` + metadata, no separate vector tables. |
 | Supabase Edge Function — dumb-pipe webhook receiver | M | TS function. Verify Resend signature → Storage upload → INSERT `inbound_emails` (status='pending') → 200. **No** PDF parsing, **no** LLM calls, **no** embeddings. Sub-second response. |
 | Modal Python worker — pending-row processor | M | Polls (or webhook-triggered) `WHERE status='pending'`. Runs all heavy steps: classify → extract → confidentiality → dedup → vectorize → DB writes. |
 | CV classifier agent (`is_cv?`) | S | DeepSeek call from Modal worker. JSON output `{is_cv, confidence}`. |

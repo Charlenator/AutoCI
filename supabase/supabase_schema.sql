@@ -34,6 +34,18 @@ CREATE TABLE candidates (
     source_channel TEXT NOT NULL,   -- e.g., 'LinkedIn', 'Referral', 'Direct'
     applied_date DATE NOT NULL,
     external_id TEXT UNIQUE,        -- ATS candidate ID, anonymized
+    -- Migration 004: CV-driven applicant fields (NULL for synthetic pipeline candidates)
+    name TEXT,
+    email TEXT,
+    phone TEXT,
+    skills_json JSONB,
+    experience_summary TEXT,
+    cv_storage_path TEXT,
+    dedup_hash TEXT,
+    is_duplicate BOOLEAN DEFAULT false,
+    missing_fields_json JSONB,
+    confidential BOOLEAN DEFAULT false,
+    source_email_id UUID,           -- FK to inbound_emails (defined later for forward ref)
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -210,12 +222,42 @@ CREATE TABLE agent_invocations (
 
 CREATE TABLE corpus_chunks (
     chunk_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    corpus_name TEXT NOT NULL,       -- e.g., 'lss_case_studies', 'role_benchmarks', 'dmaic_tools', 'adzuna_postings'
+    corpus_name TEXT NOT NULL,       -- e.g., 'lss_case_studies', 'role_benchmarks', 'cvs', 'jds', 'inbound_emails', 'event_summaries'
     chunk_text TEXT NOT NULL,
-    metadata JSONB DEFAULT '{}',    -- e.g., {"phase": "Analyse", "role": "Java Developer"}
+    metadata JSONB DEFAULT '{}',    -- e.g., {"candidate_id": "...", "role": "Java Developer"}
     embedding VECTOR(1536) NOT NULL,
+    confidential BOOLEAN DEFAULT false, -- Migration 004: filtered out by match_chunks RPC by default
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Migration 004: inbound CV email pipeline (queue table for the Modal worker)
+CREATE TABLE inbound_emails (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    svix_id TEXT UNIQUE,                         -- dedup key from Resend webhook
+    status TEXT NOT NULL DEFAULT 'pending',      -- pending | processing | processed | error | not_cv
+    sender TEXT,
+    recipient TEXT,
+    subject TEXT,
+    body_text TEXT,
+    body_html TEXT,
+    attachment_filename TEXT,
+    attachment_storage_path TEXT,
+    attachment_mime TEXT,
+    attachment_size INTEGER,
+    dedup_hash TEXT,
+    is_duplicate BOOLEAN DEFAULT false,
+    classified_as_cv BOOLEAN,
+    confidential BOOLEAN DEFAULT false,
+    candidate_id UUID REFERENCES candidates(candidate_id) ON DELETE SET NULL,
+    error_log TEXT,
+    raw_webhook_payload JSONB,
+    received_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    processed_at TIMESTAMPTZ
+);
+
+-- Resolve forward FK (candidates.source_email_id → inbound_emails)
+ALTER TABLE candidates ADD CONSTRAINT candidates_source_email_id_fkey
+    FOREIGN KEY (source_email_id) REFERENCES inbound_emails(id) ON DELETE SET NULL;
 
 -- ======================================================================
 -- 8. INDEXES & PERFORMANCE
@@ -241,6 +283,15 @@ CREATE INDEX idx_agent_invocations_session ON agent_invocations(session_id);
 
 -- RAG vector search (cosine similarity is default but we can specify)
 CREATE INDEX idx_corpus_embedding ON corpus_chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+CREATE INDEX idx_corpus_chunks_confidential ON corpus_chunks(confidential) WHERE confidential = false;
+
+-- Migration 004 indexes
+CREATE INDEX idx_candidates_email ON candidates(email);
+CREATE INDEX idx_candidates_dedup_hash ON candidates(dedup_hash);
+CREATE INDEX idx_candidates_confidential ON candidates(confidential) WHERE confidential = false;
+CREATE INDEX idx_inbound_emails_status ON inbound_emails(status);
+CREATE INDEX idx_inbound_emails_dedup_hash ON inbound_emails(dedup_hash);
+CREATE INDEX idx_inbound_emails_received_at ON inbound_emails(received_at DESC);
 -- For exact nearest neighbour (optional, small dataset)
 -- CREATE INDEX idx_corpus_embedding ON corpus_chunks USING hnsw (embedding vector_cosine_ops);
 

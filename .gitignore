@@ -75,3 +75,9 @@ backend/.venv/
 
 # Claude Code local project state (settings, agent caches).
 .claude/
+
+# CV generator: test data is regeneratable; keep it local.
+# Tooling (make_cvs.py + README.md) is committed; outputs and batches are not.
+dev-tools/cv_generator/output/
+dev-tools/cv_generator/*.json
+!dev-tools/cv_generator/sample_batch.json

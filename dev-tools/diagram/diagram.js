@@ -124,10 +124,10 @@ const NODES_RAW = [
   ['worker', 'w_conf',      'S7 Confidentiality classifier',      'todo',    'S',  '6'],
   ['worker', 'w_vec',       'Email vectorizer',                   'todo',    'S',  '6'],
 
-  // DB TABLES
+  // DB TABLES — unified corpus design: CVs/JDs/email summaries all live in corpus_chunks
   ['db', 'db_roles',         'roles',                             'done',    '',   '—'],
   ['db', 'db_intvw',         'interviewers',                      'done',    '',   '—'],
-  ['db', 'db_cand',          'candidates (+CV cols)',             'wip',     'S',  '6'],
+  ['db', 'db_cand',          'candidates (+CV cols)',             'done',    '',   '6'],
   ['db', 'db_pipe',          'pipeline_events',                   'done',    '',   '—'],
   ['db', 'db_hires',         'hires',                             'done',    '',   '—'],
   ['db', 'db_off',           'offer_outcomes',                    'done',    '',   '—'],
@@ -136,17 +136,13 @@ const NODES_RAW = [
   ['db', 'db_sess',          'kaizen_sessions',                   'done',    '',   '—'],
   ['db', 'db_nodes',         'kaizen_nodes',                      'done',    '',   '—'],
   ['db', 'db_inv',           'agent_invocations',                 'done',    '',   '—'],
-  ['db', 'db_chunks',        'corpus_chunks (+confidential)',     'wip',     'XS', '6'],
-  ['db', 'db_inbox',         'inbound_emails',                    'todo',    'S',  '6'],
-  ['db', 'db_cv_ch',         'cv_chunks',                         'todo',    'S',  '6'],
-  ['db', 'db_jd_ch',         'jd_chunks',                         'todo',    'S',  '6'],
-  ['db', 'db_email_rag',     'rag_email_summaries',               'todo',    'S',  '6'],
-  ['db', 'db_evt_sum',       'event_summaries',                   'todo',    'S',  '6'],
+  ['db', 'db_chunks',        'corpus_chunks (+confidential)',     'done',    '',   '6'],
+  ['db', 'db_inbox',         'inbound_emails',                    'done',    '',   '6'],
   ['db', 'db_intv_tbl',      'interventions',                     'todo',    'S',  '7'],
-  ['db', 'db_rpc',           'match_chunks RPC (+filter)',        'wip',     'XS', '6'],
+  ['db', 'db_rpc',           'match_chunks RPC (+filter)',        'done',    '',   '6'],
 
   // STORAGE
-  ['storage', 'st_cv', 'cv-attachments bucket',                   'todo',    'XS', '6'],
+  ['storage', 'st_cv', 'cv-attachments bucket',                   'done',    '',   '6'],
 
   // EXTERNAL
   ['external', 'e_ds',     'DeepSeek (LiteLLM)',                  'done',    '',   '—'],
@@ -200,8 +196,7 @@ const EDGES_RAW = [
   ['w_processor', 'w_conf'],
   ['w_processor', 'w_vec'],
   ['w_processor', 'db_cand'],
-  ['w_processor', 'db_cv_ch'],
-  ['w_processor', 'db_email_rag'],
+  ['w_processor', 'db_chunks'],
 
   // Simulated inbound -> same Edge function
   ['r_inbound', 'ef_inbound'],

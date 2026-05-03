@@ -97,7 +97,7 @@ graph TB
     subgraph DB [" 🗄️ Supabase Tables"]
         DB_ROLES["roles<br/>✅"]:::done
         DB_INTV_RAW["interviewers<br/>✅"]:::done
-        DB_CAND["candidates<br/>⚙️ [S] add CV columns"]:::wip
+        DB_CAND["candidates (+CV cols)<br/>✅ migration 004"]:::done
         DB_PIPE["pipeline_events<br/>✅"]:::done
         DB_HIRES["hires<br/>✅"]:::done
         DB_OFF["offer_outcomes<br/>✅"]:::done
@@ -106,14 +106,10 @@ graph TB
         DB_SESS["kaizen_sessions<br/>✅"]:::done
         DB_NODES["kaizen_nodes<br/>✅"]:::done
         DB_INV["agent_invocations<br/>✅"]:::done
-        DB_CHUNKS["corpus_chunks (+ confidential col)<br/>⚙️ [XS]"]:::wip
-        DB_INBOX["inbound_emails<br/>📋 [S]"]:::todo
-        DB_CV_CH["cv_chunks<br/>📋 [S]"]:::todo
-        DB_JD_CH["jd_chunks<br/>📋 [S]"]:::todo
-        DB_EMAIL_RAG["rag_email_summaries<br/>📋 [S]"]:::todo
-        DB_EVT_SUM["event_summaries<br/>📋 [S]"]:::todo
+        DB_CHUNKS["corpus_chunks (+ confidential col)<br/>✅ migration 004"]:::done
+        DB_INBOX["inbound_emails<br/>✅ migration 004"]:::done
         DB_INTV_TBL["interventions<br/>📋 [S]"]:::todo
-        DB_RPC["match_chunks RPC (+ confidentiality filter)<br/>⚙️ [XS]"]:::wip
+        DB_RPC["match_chunks RPC (+ confidentiality filter)<br/>✅ migration 004"]:::done
     end
 
     subgraph EDGE [" ⚡ Supabase Edge Functions (dumb pipe)"]
@@ -129,7 +125,7 @@ graph TB
     end
 
     subgraph STORAGE [" 📦 Supabase Storage"]
-        ST_CV["cv-attachments bucket<br/>📋 [XS]"]:::todo
+        ST_CV["cv-attachments bucket<br/>✅ migration 004"]:::done
     end
 
     subgraph EXT [" 🌐 External APIs"]
@@ -177,8 +173,7 @@ graph TB
     W_PROCESSOR --> W_CONF
     W_PROCESSOR --> W_VEC
     W_PROCESSOR --> DB_CAND
-    W_PROCESSOR --> DB_CV_CH
-    W_PROCESSOR --> DB_EMAIL_RAG
+    W_PROCESSOR --> DB_CHUNKS
     R_INBOUND -.simulates.-> EF_INBOUND
 ```
 
@@ -252,15 +247,12 @@ graph TB
 | Workflow | O2 dynamic tool runner | 📋 | M | 7 | Consumes selector list |
 | Workflow | SSE infra + HITL queue | ✅ | — | 4 | |
 | DB | roles, interviewers, pipeline_events, hires, offer_outcomes, industry_benchmarks, adzuna_postings, kaizen_sessions, kaizen_nodes, agent_invocations | ✅ | — | — | |
-| DB | candidates (+ CV cols) | ⚙️ | S | 6 | Add name/email/phone/skills/cv_storage_path/etc |
-| DB | corpus_chunks (+ confidential col) | ⚙️ | XS | 6 | One column add |
-| DB | match_chunks RPC (+ filter) | ⚙️ | XS | 6 | One WHERE clause |
-| DB | inbound_emails | 📋 | S | 6 | |
-| DB | cv_chunks | 📋 | S | 6 | |
-| DB | jd_chunks | 📋 | S | 6 | |
-| DB | rag_email_summaries | 📋 | S | 6 | |
-| DB | event_summaries | 📋 | S | 6 | |
+| DB | candidates (+ CV cols) | ✅ | — | 6 | Migration 004 applied 2026-05-03 |
+| DB | corpus_chunks (+ confidential col) | ✅ | — | 6 | Migration 004 |
+| DB | match_chunks RPC (+ confidentiality filter) | ✅ | — | 6 | Migration 004 |
+| DB | inbound_emails | ✅ | — | 6 | Migration 004 |
 | DB | interventions | 📋 | S | 7 | |
+| DB | (unified corpus design — no separate cv_chunks/jd_chunks/etc.) | — | — | — | Single corpus_chunks distinguishes via corpus_name + metadata JSONB |
 | Edge | inbound-email receiver (dumb pipe) | 📋 | M | 6 | Verify sig + Storage + queue insert + 200 |
 | Worker | inbound_processor.py | 📋 | M | 6 | Modal Python; polls pending rows; orchestrates downstream agents |
 | Worker | S5 CV classifier (.docx only) | 📋 | S | 6 | DeepSeek call |
