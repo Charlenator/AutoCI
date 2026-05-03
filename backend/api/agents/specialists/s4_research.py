@@ -43,6 +43,35 @@ class ResearchAgent:
             adzuna_results=adzuna_r if not isinstance(adzuna_r, Exception) else [],
         )
 
+    # ── B-aug: chat-path live augmentation ─────────────────────
+
+    def live_augment(self, topic: str, sources: list[str]) -> dict:
+        """Fetch from the named external sources and persist into corpus_chunks.
+
+        Returns a per-source summary the chat layer renders in the Query
+        Transformation Card so users can see the web round-trip happened.
+        Each source dict carries `count` (items returned) and `error` (str|None);
+        sources may also be skipped if not in the allow-list.
+        """
+        allowed = {"tavily", "news", "adzuna"}
+        summary: dict[str, dict] = {}
+        for raw in sources:
+            name = (raw or "").strip().lower()
+            if name not in allowed:
+                continue
+            if name == "tavily":
+                rows = self.search_tavily(topic)
+            elif name == "news":
+                rows = self.search_news(topic)
+            else:  # adzuna
+                rows = self.search_adzuna(topic)
+            err = rows[0].get("error") if rows and rows[0].get("error") else None
+            summary[name] = {
+                "count": 0 if err else len(rows),
+                "error": err,
+            }
+        return summary
+
     # ── Individual per-API public methods (persist + return) ───
 
     def search_tavily(self, query: str) -> list[dict]:
@@ -170,17 +199,23 @@ class ResearchAgent:
 
         for r, emb in zip(to_insert, embeddings):
             try:
-                self.supabase.table("adzuna_postings").insert({
-                    "adzuna_id": r["adzuna_id"],
-                    "title": r["title"],
-                    "company": r.get("company"),
-                    "location": r.get("location"),
-                    "salary_min": r.get("salary_min"),
-                    "salary_max": r.get("salary_max"),
-                    "posted_date": (r.get("posted_date") or "2025-01-01")[:10],
-                    "redirect_url": r.get("redirect_url"),
-                    "embedding": emb,
-                }).execute()
+                # Upsert with ignore_duplicates so the per-row pre-check race
+                # (two writers seeing no-existing-row at the same time) is safe.
+                self.supabase.table("adzuna_postings").upsert(
+                    {
+                        "adzuna_id": r["adzuna_id"],
+                        "title": r["title"],
+                        "company": r.get("company"),
+                        "location": r.get("location"),
+                        "salary_min": r.get("salary_min"),
+                        "salary_max": r.get("salary_max"),
+                        "posted_date": (r.get("posted_date") or "2025-01-01")[:10],
+                        "redirect_url": r.get("redirect_url"),
+                        "embedding": emb,
+                    },
+                    on_conflict="adzuna_id",
+                    ignore_duplicates=True,
+                ).execute()
             except Exception as e:
                 print(f"[S4] Adzuna persist error: {e}")
 
@@ -208,11 +243,18 @@ class ResearchAgent:
         for (r, chunk_text), emb in zip(to_insert, embeddings):
             try:
                 title = r.get("title", "")
-                self.supabase.table("corpus_chunks").insert({
-                    "corpus_name": corpus_name,
-                    "chunk_text": chunk_text,
-                    "metadata": json.dumps({**metadata, "title": title}),
-                    "embedding": emb,
-                }).execute()
+                # Upsert + ignore_duplicates relies on migration 007's UNIQUE
+                # content_hash index. Re-vectorizing the same Adzuna posting or
+                # Tavily snippet across runs becomes a no-op rather than a 23505.
+                self.supabase.table("corpus_chunks").upsert(
+                    {
+                        "corpus_name": corpus_name,
+                        "chunk_text": chunk_text,
+                        "metadata": json.dumps({**metadata, "title": title}),
+                        "embedding": emb,
+                    },
+                    on_conflict="content_hash",
+                    ignore_duplicates=True,
+                ).execute()
             except Exception as e:
                 print(f"[S4] Chunk persist error ({corpus_name}): {e}")

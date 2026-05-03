@@ -13,10 +13,24 @@ export interface QueryPlan {
   rag_query: string | null;
   rag_corpus_filter: string | null;
 
+  // B-aug: live-search augmentation. When needs_live_search is true the chat
+  // route fetches from the listed sources, persists into corpus_chunks (with
+  // ignore_duplicates so migration 007 holds), then re-retrieves via S2.
+  needs_live_search: boolean;
+  live_search_sources: string[];           // subset of {"tavily","news","adzuna"}
+  live_search_topic: string | null;
+
   explanation: string;
   confidence: number;
   fallback_reason: string | null;
 }
+
+// Per-source summary of the live-search round-trip the chat route ran.
+// Keyed by source name; { count: items returned, error: failure message | null }.
+export type LiveSearchPayload = Record<
+  string,
+  { count?: number; error?: string | null }
+>;
 
 export interface SqlResult {
   template_id: string | null;
@@ -46,6 +60,7 @@ export interface ChatResponse {
   plan: QueryPlan | null;
   sql_result: SqlResult | null;
   rag_chunks: RagChunk[] | null;
+  live_search?: LiveSearchPayload | null;
   sources: string[];
 }
 
@@ -116,6 +131,12 @@ export function planRouteSummary(plan: QueryPlan): string[] {
   if (plan.needs_rag) {
     const corpus = plan.rag_corpus_filter ? ` (${plan.rag_corpus_filter})` : "";
     lines.push(`Vector retrieval${corpus}`);
+  }
+  if (plan.needs_live_search) {
+    const srcs = plan.live_search_sources.length
+      ? plan.live_search_sources.join(", ")
+      : "all sources";
+    lines.push(`Live web search [${srcs}]`);
   }
   if (lines.length === 0) {
     lines.push("No retrieval path picked");

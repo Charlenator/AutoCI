@@ -6,6 +6,7 @@ import {
   buildCitations,
   type ChatResponse,
   type Citation as CitationType,
+  type LiveSearchPayload,
   type QueryPlan,
   type SqlResult,
 } from "../../lib/chat-types";
@@ -26,6 +27,7 @@ type ChatTurn =
       sqlResult: SqlResult | null;
       ragChunkCount: number;
       citations: CitationType[];
+      liveSearch: LiveSearchPayload | null;
       error?: string;
     };
 
@@ -69,6 +71,7 @@ export default function ChatPanel() {
         sqlResult: data.sql_result,
         ragChunkCount: data.rag_chunks?.length ?? 0,
         citations,
+        liveSearch: data.live_search ?? null,
       };
       setTurns((t) => [...t, assistantTurn]);
     } catch (err) {
@@ -83,6 +86,7 @@ export default function ChatPanel() {
           sqlResult: null,
           ragChunkCount: 0,
           citations: [],
+          liveSearch: null,
           error: message,
         },
       ]);
@@ -237,6 +241,7 @@ function AssistantMessage({
           plan={turn.plan}
           sqlResult={turn.sqlResult}
           ragChunkCount={turn.ragChunkCount}
+          liveSearch={turn.liveSearch}
         />
       )}
       {turn.citations.length > 0 && (

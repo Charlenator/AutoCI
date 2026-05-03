@@ -17,7 +17,7 @@ import ReactFlow, {
 // Update each time work shifts. Keep both sides in sync — Charle should always
 // know what (if anything) is blocking him.
 const NOW = {
-  claude: "B-evidence shipped: SQL templates with aggregate output now expose an optional build_evidence() that returns the underlying source rows (e.g. the 3 hires behind a TTF average). ExecutorResult carries evidence_sql + evidence_rows; Citation Drawer renders 'Source records (N)' as an expandable section with its own Source SQL toggle. 5 templates wired (time_to_fill, offer_acceptance_rate, conversion_rate, kpis_for_role, pipeline_volume_by_stage); record-level templates (candidate_search_by_skill etc.) intentionally have no evidence. Next: B-aug live-search augmentation, then B5 Modal worker fill.",
+  claude: "B-aug shipped: Query Planner now emits needs_live_search + live_search_sources + live_search_topic. chat.py calls S4.live_augment(topic, sources) which fans out to Tavily/News/Adzuna, chunks + embeds + upserts into corpus_chunks (ignore_duplicates so migration 007's UNIQUE content_hash holds), then S2 RAGAgent re-retrieves over the augmented corpus. Per-source counts surface in QueryTransformationCard's 'What we ran' block. Adzuna postings table also moved to upsert/ignore_duplicates. Next: B5 — fill the Modal worker (S5 classifier + S6 .docx extractor + S7 confidentiality + section-based smart-chunking + email vectorizer).",
   charle: "Two optional parallel tasks (non-blocking): (1) Set RESEND_WEBHOOK_SECRET on Supabase Edge Function secrets (Step 5 below). (2) Generate more CV variety if you want edge cases to test. Otherwise just chill until next session — fresh context, clean state.",
 };
 
@@ -154,7 +154,7 @@ const SPRINTS = [
     id: "B",
     label: "Brief-required closures",
     status: "in_progress",
-    progress: 0.6,
+    progress: 0.65,
     substeps: [
       { id: "B1", label: "Query Planner + sql_templates + SQL exec + 4-layer safety", status: "done" },
       { id: "B2", label: "Citation chip system + CitationDrawer + QueryTransformationCard + ChatPanel", status: "done" },
@@ -162,7 +162,7 @@ const SPRINTS = [
       { id: "B3", label: "Knowledge Sources Panel + /sources route", status: "done" },
       { id: "B4", label: "Edge Function v2 + Modal worker scaffold + /inbound/simulate + /inbound/trigger + /inbound/drain", status: "done" },
       { id: "B-evidence", label: "Source-record evidence in Citation Drawer — templates emit optional build_evidence(); ExecutorResult carries evidence_rows/sql; UI renders aggregate + expandable Source Records.", status: "done" },
-      { id: "B-aug", label: "Live-search augmentation in chat path (planner needs_live_search → S4 → upsert into corpus_chunks → re-retrieve)", status: "pending" },
+      { id: "B-aug", label: "Live-search augmentation in chat path: planner emits needs_live_search + sources + topic; chat.py calls S4.live_augment which upserts (ignore_duplicates) into corpus_chunks; S2 re-retrieves; QueryTransformationCard surfaces per-source counts.", status: "done" },
       { id: "B5", label: "Modal worker filling — classifier + extractor + confidentiality + vectorizer", status: "pending" },
       { id: "B6", label: "Resend send wrapper", status: "pending" },
       { id: "B7", label: "cal.com slot wrapper", status: "pending" },
@@ -200,6 +200,7 @@ const SPRINTS = [
 // ---------- Changelog (most recent first) ----------
 // kind: 'shipped' | 'progress' | 'cut' | 'decision' | 'infra'
 const CHANGELOG = [
+  { date: "2026-05-03", kind: "shipped", text: "B-aug shipped — Query Planner JSON envelope gains needs_live_search + live_search_sources + live_search_topic. The sanitizer auto-fills sources to all three when the planner forgets, defaults the topic to the original query, and forces needs_rag=true so the augmented corpus actually gets read. chat.py adds a step before SQL/RAG: instantiate ResearchAgent, call live_augment(topic, sources), the agent fans out to Tavily/News/Adzuna and persists results via upsert(...ignore_duplicates=True) on both corpus_chunks (on_conflict=content_hash) and adzuna_postings (on_conflict=adzuna_id). The chat response now carries a live_search dict the QueryTransformationCard renders as a per-source count line in the 'What we ran' block. Closes the brief's 'trigger live web search when the question implies recent / current data' gap." },
   { date: "2026-05-03", kind: "shipped", text: "B-evidence shipped — SQLTemplate gains optional build_evidence(); ExecutorResult carries evidence_sql + evidence_rows + evidence_error; chat.py forwards them; Citation drawer renders an expandable 'Source records (N)' section under the aggregate, with its own Source SQL toggle. Wired for time_to_fill, offer_acceptance_rate, conversion_rate, kpis_for_role, pipeline_volume_by_stage. Already-record-level templates (candidate_search_by_skill, candidate_by_email, industry_benchmark_for_role) intentionally have no evidence path. Unit-test coverage added in test_all.py. Closes Charle's last ask before the prior handoff." },
   { date: "2026-05-03", kind: "decision", text: "B-evidence added to plan (next-session priority): templates get an optional build_evidence() that returns the *underlying source rows* (the 3 hires that produced the 83.3-day average), not just the aggregate. Citation Drawer renders both. Stronger 'source traceability' demo." },
   { date: "2026-05-03", kind: "decision", text: "B-aug added to plan: live-search augmentation in chat path. Currently S4 is Kaizen-only; chat questions about current market data get stale answers. Next session item." },

@@ -21,6 +21,7 @@ from pydantic import BaseModel
 from api.agents.specialists.s1_query_planner import QueryPlannerAgent
 from api.agents.specialists.s2_rag import RAGAgent
 from api.agents.specialists.s3_sql_executor import SQLExecutor
+from api.agents.specialists.s4_research import ResearchAgent
 
 router = APIRouter()
 
@@ -36,6 +37,9 @@ class ChatResponse(BaseModel):
     plan: dict | None = None
     sql_result: dict | None = None
     rag_chunks: list[dict] | None = None
+    # B-aug: per-source summary of the live-search round-trip when the planner
+    # set needs_live_search. Each entry: {"count": int, "error": str|None}.
+    live_search: dict | None = None
     sources: list[str] = []  # legacy field kept for back-compat with current dashboard code
 
 
@@ -58,6 +62,21 @@ async def chat_query(body: ChatRequest, request: Request):
 
         sql_payload: dict | None = None
         rag_chunks_payload: list[dict] | None = None
+        live_search_payload: dict | None = None
+
+        # ---- Live-search augmentation (B-aug) ----
+        # Runs before RAG so the freshly-fetched chunks land in corpus_chunks
+        # in time for the vector search below. The S4 agent already chunks +
+        # embeds + upserts (with ignore_duplicates so migration 007 holds).
+        if plan.needs_live_search and plan.live_search_sources:
+            try:
+                research_agent = ResearchAgent(supabase_client=supabase)
+                topic = plan.live_search_topic or body.message
+                live_search_payload = research_agent.live_augment(
+                    topic, plan.live_search_sources
+                )
+            except Exception as exc:  # noqa: BLE001
+                live_search_payload = {"error": f"live search failed: {exc}"}
 
         # ---- SQL path ----
         if plan.needs_sql:
@@ -109,6 +128,7 @@ async def chat_query(body: ChatRequest, request: Request):
             plan=plan.to_envelope(),
             sql_result=sql_payload,
             rag_chunks=rag_chunks_payload,
+            live_search=live_search_payload,
             sources=legacy_sources,
         )
 

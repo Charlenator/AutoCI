@@ -88,6 +88,21 @@ When Sprint D5 (submission deliverables) lands, the README and screen-record nar
 
 ---
 
+## Q: "What happens when a user asks about *current* market conditions — how do you avoid stale answers?"
+
+**Short version**:
+> The Query Planner is taught to recognise "current / recent / today / market" cues in the question and emits a `needs_live_search` flag plus a list of relevant sources (Adzuna for postings, NewsAPI for articles, Tavily for general web). When that flag is set, the chat endpoint runs a pre-RAG step that fetches from those sources and *upserts* the results into the same `corpus_chunks` table everything else lives in — using `ignore_duplicates=True` against migration 007's unique `content_hash` constraint, so re-runs are no-ops. After the upsert, the existing S2 RAG agent retrieves from the now-augmented corpus, so the live-fetched material flows through the same citation + drawer path as everything else.
+
+**Why this is the right shape**:
+- One retrieval surface, not two. There's no "live search results" separate UI; fresh chunks just become part of the corpus and surface as normal RAG citations.
+- The unique-content-hash constraint means no duplicate ingestion, even if the user asks the same question twice in a row or different users hit overlapping topics.
+- The planner is the only piece that's allowed to *decide* when to fire — not a regex on the user's text — so it stays adjustable via prompting rather than a brittle heuristic.
+
+**What it *doesn't* do**:
+- No streaming "Searching the web…" indicator yet. The endpoint blocks until the augmentation finishes; the chat UI's "Thinking…" indicator covers that latency. SSE-streamed progress is in ROADMAP.
+
+---
+
 ## Q: "How does the system handle source traceability for an aggregated number — like 'average time to fill is 83.3 days'?"
 
 **Short version**:

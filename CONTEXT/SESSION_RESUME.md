@@ -4,7 +4,9 @@
 >
 > Big productive session. Sprints A1, A2, B1, B2 (+ polish), B3, B4 all shipped + pushed to main. Migrations 004 / 005 / 006 / 007 applied. Embedding stack switched off OpenAI (free local bge-small-en-v1.5). Edge Function v2 + Modal-worker-scaffold + /inbound/* routes + KnowledgeSourcesPanel + Citation Drawer + Query Transformation Card all live.
 >
-> **Update — same evening, second pass**: B-evidence is now also shipped. Five aggregate-result SQL templates (TTF, OAR, conversion, KPI summary, pipeline volume) gained an optional `build_evidence` companion that returns the underlying source rows. `ExecutorResult` carries `evidence_sql` / `evidence_rows` / `evidence_error`; chat.py forwards them; the Citation drawer renders an expandable "Source records (N)" section under the aggregate. Evidence-only failures are isolated from the main result. `test_all.py` exercises the new path. Pick up B-aug next.
+> **Update — same evening, second pass**: B-evidence is now also shipped. Five aggregate-result SQL templates (TTF, OAR, conversion, KPI summary, pipeline volume) gained an optional `build_evidence` companion that returns the underlying source rows. `ExecutorResult` carries `evidence_sql` / `evidence_rows` / `evidence_error`; chat.py forwards them; the Citation drawer renders an expandable "Source records (N)" section under the aggregate. Evidence-only failures are isolated from the main result. `test_all.py` exercises the new path.
+>
+> **Update — same evening, third pass**: B-aug is now also shipped. Query Planner JSON envelope gains `needs_live_search` + `live_search_sources` + `live_search_topic`. The sanitizer auto-fills sources, defaults the topic, and forces `needs_rag=true` so the augmented corpus is actually retrieved from. chat.py runs a pre-RAG step that calls `S4.live_augment(topic, sources)` which fans out to Tavily/News/Adzuna and persists into `corpus_chunks` via `upsert(..., ignore_duplicates=True, on_conflict="content_hash")` — migration 007's UNIQUE index keeps the path safe. Response payload gains a `live_search` dict; QueryTransformationCard renders it as a "Live web search" pill with per-source counts. Pick up **B5** (Modal worker fill — S5 classifier, S6 .docx extractor, S7 confidentiality, section-based smart-chunking, email vectorizer) next.
 >
 > **Project files for the next session to read first**:
 > - `CONTEXT/plan-of-record.md` — phases B5 → D5 still ahead. Ignore phases marked ✅ in the status table.
@@ -24,8 +26,7 @@
 >
 > ## What's next (priority-ordered)
 >
-> 1. **B-aug — live-search augmentation in chat path.** Currently S4 is Kaizen-only; chat questions like "current market salaries" get stale data. Add a `needs_live_search` flag to the Query Planner envelope; when set, chat.py calls S4 → chunks → embeds → upserts → re-retrieves. Migration 007's UNIQUE constraint makes the upsert path safe.
-> 2. **B5 — fill the Modal worker.** Shipped scaffold (`backend/api/workers/inbound_processor.py`); body still does a stub classifier on MIME type. Next session needs:
+> 1. **B5 — fill the Modal worker.** Shipped scaffold (`backend/api/workers/inbound_processor.py`); body still does a stub classifier on MIME type. Next session needs:
 >    - S5 CV classifier agent (DeepSeek "is this a CV?" call)
 >    - S6 CV extractor (`python-docx` text extraction → DeepSeek field extraction → normalized JSON)
 >    - S7 Confidentiality classifier
@@ -33,12 +34,12 @@
 >    - Email vectorizer for non-CV inbound mail
 >    - Wire all of these into `process_pending_email`
 >    - Test via `/inbound/simulate` with one of Charle's 20 generated `.docx` CVs from `dev-tools/cv_generator/output/`
-> 3. **B6 — Resend send wrapper.** Thin Python client.
-> 4. **B7 — cal.com slot lookup wrapper.** Free-tier API, spike-verified 2026-05-03.
-> 5. **B8 — Candidate Search interface + Schedule Meeting flow.** Largest remaining UI piece.
-> 6. **Sprint C** — CIS rebrand + interventions table + FMEA tool + React Flow drawer.
-> 7. **Sprint D** — deploy (Vercel auto-deploys; Modal needs `modal_config.py` build-out).
-> 8. **Sprint 9** — submission deliverables.
+> 2. **B6 — Resend send wrapper.** Thin Python client.
+> 3. **B7 — cal.com slot lookup wrapper.** Free-tier API, spike-verified 2026-05-03.
+> 4. **B8 — Candidate Search interface + Schedule Meeting flow.** Largest remaining UI piece.
+> 5. **Sprint C** — CIS rebrand + interventions table + FMEA tool + React Flow drawer.
+> 6. **Sprint D** — deploy (Vercel auto-deploys; Modal needs `modal_config.py` build-out).
+> 7. **Sprint 9** — submission deliverables.
 >
 > ## Open parallel tasks for Charle (not blocking)
 >

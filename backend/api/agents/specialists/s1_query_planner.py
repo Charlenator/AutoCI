@@ -34,6 +34,9 @@ from api.tools.t3_litellm_router import LiteLLMRouter
 # Output dataclass
 # ---------------------------------------------------------------------------
 
+_LIVE_SEARCH_SOURCES = {"tavily", "news", "adzuna"}
+
+
 @dataclass
 class QueryPlan:
     """Structured plan for how to answer a chat query."""
@@ -47,6 +50,14 @@ class QueryPlan:
     needs_rag: bool = False
     rag_query: str | None = None
     rag_corpus_filter: str | None = None
+
+    # B-aug: live web/news/jobs augmentation. When set, chat.py calls S4 with
+    # the listed sources, persists the results into corpus_chunks (upsert with
+    # ignore_duplicates so migration 007's UNIQUE content_hash holds), then
+    # re-retrieves via S2 against the freshly-augmented corpus.
+    needs_live_search: bool = False
+    live_search_sources: list[str] = field(default_factory=list)
+    live_search_topic: str | None = None
 
     explanation: str = ""
     confidence: float = 0.0
@@ -96,6 +107,15 @@ You have three retrieval paths:
 
 Use **both** SQL and RAG when the question wants a number AND context (e.g. "what's our offer acceptance and why is it low?").
 
+You can also flag **live search**:
+- Set `needs_live_search: true` when the question implies *current / recent* external information that the existing corpora are unlikely to have — e.g. "what are current market salaries", "any recent industry news on attrition", "what jobs are currently advertised for X". Otherwise leave it false.
+- `live_search_sources` is a list picked from {{"tavily", "news", "adzuna"}}. Use:
+    - "adzuna"  for current job postings / salary signals
+    - "news"    for recent articles / events
+    - "tavily"  for general web search (definitions, opinions, reports)
+- `live_search_topic` is the search string (typically a 2-5 word phrase). Default to the role title or topic word if unsure.
+- When you set `needs_live_search: true`, also set `needs_rag: true` so the augmented corpus is searched after fetch.
+
 Rules — strict:
 - Only emit SELECT (or WITH-CTE) statements in `sql_freeform`. Never INSERT/UPDATE/DELETE/DDL.
 - Prefer templates over freeform whenever a template fits.
@@ -118,19 +138,25 @@ Output a single JSON object exactly matching this shape (no markdown fences, no 
   "needs_rag": bool,
   "rag_query": string | null,
   "rag_corpus_filter": string | null,
+  "needs_live_search": bool,
+  "live_search_sources": string[],
+  "live_search_topic": string | null,
   "explanation": string,
   "confidence": number
 }}
 
 Examples:
 User: "What's our average time to fill for Java Developers?"
-{{"needs_sql": true, "sql_template_id": "time_to_fill", "sql_template_params": {{"role_title": "Java Developer"}}, "sql_freeform": null, "needs_rag": false, "rag_query": null, "rag_corpus_filter": null, "explanation": "Looked up the average time-to-fill metric, filtered to roles matching 'Java Developer'.", "confidence": 0.95}}
+{{"needs_sql": true, "sql_template_id": "time_to_fill", "sql_template_params": {{"role_title": "Java Developer"}}, "sql_freeform": null, "needs_rag": false, "rag_query": null, "rag_corpus_filter": null, "needs_live_search": false, "live_search_sources": [], "live_search_topic": null, "explanation": "Looked up the average time-to-fill metric, filtered to roles matching 'Java Developer'.", "confidence": 0.95}}
 
 User: "What is DMAIC and how does it apply here?"
-{{"needs_sql": false, "sql_template_id": null, "sql_template_params": null, "sql_freeform": null, "needs_rag": true, "rag_query": "DMAIC methodology explanation", "rag_corpus_filter": "dmaic_methodology", "explanation": "Routed to the DMAIC methodology corpus for a definitional answer.", "confidence": 0.9}}
+{{"needs_sql": false, "sql_template_id": null, "sql_template_params": null, "sql_freeform": null, "needs_rag": true, "rag_query": "DMAIC methodology explanation", "rag_corpus_filter": "dmaic_methodology", "needs_live_search": false, "live_search_sources": [], "live_search_topic": null, "explanation": "Routed to the DMAIC methodology corpus for a definitional answer.", "confidence": 0.9}}
 
 User: "Why are UX candidates declining offers and what's our acceptance rate?"
-{{"needs_sql": true, "sql_template_id": "offer_acceptance_rate", "sql_template_params": {{"role_title": "UX"}}, "sql_freeform": null, "needs_rag": true, "rag_query": "candidates declining offers root cause", "rag_corpus_filter": "kaizen_case_studies", "explanation": "Pulled the UX offer-acceptance metric and searched prior-Kaizen case studies for declining-offer root causes.", "confidence": 0.85}}
+{{"needs_sql": true, "sql_template_id": "offer_acceptance_rate", "sql_template_params": {{"role_title": "UX"}}, "sql_freeform": null, "needs_rag": true, "rag_query": "candidates declining offers root cause", "rag_corpus_filter": "kaizen_case_studies", "needs_live_search": false, "live_search_sources": [], "live_search_topic": null, "explanation": "Pulled the UX offer-acceptance metric and searched prior-Kaizen case studies for declining-offer root causes.", "confidence": 0.85}}
+
+User: "What are current market salaries for senior Java developers in Cape Town?"
+{{"needs_sql": false, "sql_template_id": null, "sql_template_params": null, "sql_freeform": null, "needs_rag": true, "rag_query": "senior Java developer salary Cape Town", "rag_corpus_filter": null, "needs_live_search": true, "live_search_sources": ["adzuna", "tavily"], "live_search_topic": "Senior Java Developer", "explanation": "Question asks for current external market salary data; pulling fresh Adzuna postings and a Tavily web search, then re-retrieving against the augmented corpus.", "confidence": 0.85}}
 """
 
 
@@ -210,9 +236,30 @@ def _envelope_to_plan(query: str, env: dict) -> QueryPlan:
         needs_rag=bool(env.get("needs_rag", False)),
         rag_query=env.get("rag_query") or None,
         rag_corpus_filter=env.get("rag_corpus_filter") or None,
+        needs_live_search=bool(env.get("needs_live_search", False)),
+        live_search_sources=_clean_live_sources(env.get("live_search_sources")),
+        live_search_topic=(env.get("live_search_topic") or None) or None,
         explanation=str(env.get("explanation") or "").strip(),
         confidence=_clamp_confidence(env.get("confidence")),
     )
+
+
+def _clean_live_sources(raw) -> list[str]:
+    """Coerce the planner's `live_search_sources` field to a clean list of allowed names."""
+    if not raw:
+        return []
+    if isinstance(raw, str):
+        raw = [raw]
+    if not isinstance(raw, list):
+        return []
+    out: list[str] = []
+    for item in raw:
+        if not isinstance(item, str):
+            continue
+        name = item.strip().lower()
+        if name in _LIVE_SEARCH_SOURCES and name not in out:
+            out.append(name)
+    return out
 
 
 def _clamp_confidence(value) -> float:
@@ -254,6 +301,19 @@ def _sanitize_plan(plan: QueryPlan) -> QueryPlan:
 
     if plan.needs_rag and not plan.rag_query:
         plan.rag_query = plan.original_query
+
+    # B-aug: live-search post-conditions
+    if plan.needs_live_search:
+        # Default to all three sources if the planner forgot to populate the list
+        if not plan.live_search_sources:
+            plan.live_search_sources = ["tavily", "news", "adzuna"]
+        # Default the topic to the original query when missing
+        if not plan.live_search_topic:
+            plan.live_search_topic = plan.original_query
+        # Fetching new content is pointless unless we then retrieve it
+        if not plan.needs_rag:
+            plan.needs_rag = True
+            plan.rag_query = plan.rag_query or plan.original_query
 
     return plan
 

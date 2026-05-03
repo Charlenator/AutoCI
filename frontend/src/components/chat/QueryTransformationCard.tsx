@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import type { QueryPlan, SqlResult } from "../../lib/chat-types";
+import type { LiveSearchPayload, QueryPlan, SqlResult } from "../../lib/chat-types";
 
 interface QueryTransformationCardProps {
   plan: QueryPlan;
   sqlResult: SqlResult | null;
   ragChunkCount: number;
+  liveSearch?: LiveSearchPayload | null;
 }
 
 // Collapsed by default — most users want the answer, not the methodology.
@@ -17,10 +18,12 @@ export default function QueryTransformationCard({
   plan,
   sqlResult,
   ragChunkCount,
+  liveSearch,
 }: QueryTransformationCardProps) {
   const [expanded, setExpanded] = useState(false);
   const route = describeRoute(plan, sqlResult, ragChunkCount);
   const exactQuery = describeExactQuery(plan, sqlResult);
+  const liveSearchSummary = describeLiveSearch(plan, liveSearch);
 
   return (
     <section className="border border-blue-100 rounded-md bg-blue-50">
@@ -57,6 +60,14 @@ export default function QueryTransformationCard({
               </span>
               <span className="text-sm text-gray-800">{route.detailLabel}</span>
             </div>
+            {liveSearchSummary && (
+              <div className="mt-2 flex items-baseline gap-2 flex-wrap">
+                <span className="inline-block px-2 py-0.5 text-xs font-semibold rounded bg-amber-600 text-white">
+                  Live web search
+                </span>
+                <span className="text-sm text-gray-800">{liveSearchSummary}</span>
+              </div>
+            )}
             {plan.explanation && (
               <p className="mt-1 text-xs text-gray-600">{plan.explanation}</p>
             )}
@@ -231,6 +242,35 @@ type ExactQuery =
       vectorQuery: string;
       corpusFilter: string | null;
     };
+
+function describeLiveSearch(plan: QueryPlan, liveSearch: LiveSearchPayload | null | undefined): string | null {
+  if (!plan.needs_live_search) return null;
+  const topic = plan.live_search_topic || plan.original_query;
+
+  // Top-level failure shape from chat.py: {"error": "live search failed: ..."}
+  const topLevelError = (liveSearch as unknown as { error?: string } | null)?.error;
+  if (typeof topLevelError === "string") {
+    return `Failed: ${topLevelError}`;
+  }
+
+  if (!liveSearch || Object.keys(liveSearch).length === 0) {
+    const sources = plan.live_search_sources.length
+      ? plan.live_search_sources.join(", ")
+      : "all sources";
+    return `Searched ${sources} for "${topic}".`;
+  }
+
+  const parts: string[] = [];
+  for (const [name, info] of Object.entries(liveSearch)) {
+    if (info?.error) {
+      parts.push(`${name}: ${info.error}`);
+    } else {
+      const c = info?.count ?? 0;
+      parts.push(`${name}: ${c} item${c === 1 ? "" : "s"}`);
+    }
+  }
+  return `Searched for "${topic}" — ${parts.join(", ")}.`;
+}
 
 function describeExactQuery(plan: QueryPlan, sqlResult: SqlResult | null): ExactQuery | null {
   const sqlText = sqlResult?.sql || plan.sql_freeform || null;

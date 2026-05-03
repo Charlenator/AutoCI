@@ -81,3 +81,6 @@ backend/.venv/
 dev-tools/cv_generator/output/
 dev-tools/cv_generator/*.json
 !dev-tools/cv_generator/sample_batch.json
+
+# Frontend design-pass bundle: regeneratable from dev-tools/export-frontend-for-design.ps1.
+frontend-design-export/

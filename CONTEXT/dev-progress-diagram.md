@@ -220,7 +220,11 @@ graph TB
 | Specialists | S2 RAGAgent | ✅ | — | — | |
 | Specialists | S3 SQLExecutor | ✅ | — | B1 + B-evidence | Thin executor; legacy SQLAgent retired. Now also runs the optional template evidence query and attaches `evidence_rows` / `evidence_sql` / `evidence_error` to ExecutorResult. |
 | Specialists | sql_templates dict | ✅ | — | B1 + B-evidence | 8 validated templates; covers TTF/conversion/OAR/KPIs/pipeline/candidate-search/email-lookup/benchmark. 5 aggregate-result templates also expose `build_evidence` returning the underlying source rows. |
+| Specialists | S1 QueryPlanner — live-search routing | ✅ | — | B-aug | Envelope adds `needs_live_search` + `live_search_sources` + `live_search_topic`. Sanitizer fills missing sources, defaults topic, and forces `needs_rag=true` so the augmented corpus is read. |
+| Specialists | S4 ResearchAgent — chat-path augment | ✅ | — | B-aug | New `live_augment(topic, sources)` returns per-source `{count, error}` summary. Persistence in `_persist_chunks` / `_persist_adzuna` switched to `upsert(... ignore_duplicates=True)` so re-runs no-op on migration 007's UNIQUE content_hash. |
+| Routes | /chat/query — live-search step | ✅ | — | B-aug | Inserts a pre-RAG `live_augment` call when planner sets `needs_live_search`; response payload gains `live_search` dict for the UI. |
 | Frontend | Citation drawer source-records section | ✅ | — | B-evidence | Aggregate stays up top; expandable "Source records (N)" table below + Source SQL toggle. |
+| Frontend | QueryTransformationCard — live-search line | ✅ | — | B-aug | "Live web search" pill in the "What we ran" block with per-source item counts. Top-level error case rendered separately. |
 | Specialists | S4 ResearchAgent | ✅ | — | — | Tavily / News / Adzuna |
 | Detection | D1 InternalBenchmarking | ✅ | — | 2 | |
 | Detection | D2 ExternalBenchmarking | ✅ | — | 4.5 | Live salary signal live |

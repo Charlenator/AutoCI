@@ -112,6 +112,37 @@ def level1_unit():
         kpis_required_raised = True
     test("S1: missing required param raises TemplateParamError", lambda: kpis_required_raised)
 
+    # B-aug: planner envelope honours live-search fields and the sanitizer
+    # auto-fills sources + forces RAG when a stripped envelope arrives.
+    from api.agents.specialists.s1_query_planner import (
+        QueryPlan,
+        _envelope_to_plan,
+        _sanitize_plan,
+        _clean_live_sources,
+    )
+    test("B-aug: _clean_live_sources accepts known names",
+         lambda: _clean_live_sources(["Tavily", "news", "garbage"]) == ["tavily", "news"])
+    test("B-aug: _clean_live_sources tolerates None / non-list",
+         lambda: _clean_live_sources(None) == [] and _clean_live_sources("adzuna") == ["adzuna"])
+    _aug_env = {
+        "needs_sql": False,
+        "needs_rag": False,
+        "needs_live_search": True,
+        "live_search_sources": ["adzuna", "tavily"],
+        "live_search_topic": "Senior Java Developer",
+        "explanation": "live",
+        "confidence": 0.8,
+    }
+    _aug_plan = _sanitize_plan(_envelope_to_plan("current java salaries", _aug_env))
+    test("B-aug: live-search plan parses sources + topic",
+         lambda: _aug_plan.needs_live_search and _aug_plan.live_search_sources == ["adzuna", "tavily"])
+    test("B-aug: sanitizer forces needs_rag=True when live search fires",
+         lambda: _aug_plan.needs_rag is True and _aug_plan.rag_query == "current java salaries")
+    _aug_env_min = {"needs_live_search": True, "explanation": "x", "confidence": 0.5}
+    _aug_min_plan = _sanitize_plan(_envelope_to_plan("recent SA tech news", _aug_env_min))
+    test("B-aug: sanitizer auto-fills sources when planner forgets them",
+         lambda: set(_aug_min_plan.live_search_sources) == {"tavily", "news", "adzuna"} and _aug_min_plan.live_search_topic == "recent SA tech news")
+
     # B-evidence: every template that exposes build_evidence must produce a
     # SELECT/WITH-prefixed SQL string for representative params.
     evidence_params = {
