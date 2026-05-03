@@ -17,17 +17,17 @@ import ReactFlow, {
 // Update each time work shifts. Keep both sides in sync — Charle should always
 // know what (if anything) is blocking him.
 const NOW = {
-  claude: "Sprint B3 done — /sources route + KnowledgeSourcesPanel modal shipped. Live data: 6 corpora / 213 chunks / 10 SQL tables visible. Next up: B4 (Edge Function dumb pipe) + scaffolding the Modal worker for the inbound CV pipeline. After that B5 fills the worker (classifier / extractor / confidentiality / vectorizer / smart-chunking).",
-  charle: "Nothing blocking. After the next Vercel deploy lands, the Chat tab will have a 'Browse knowledge sources' link in the header — opens a panel listing every corpus + queryable table with row counts and samples. Closes the brief's '≥3 structured docs visibility' requirement.",
+  claude: "Sprint B4 done — Edge Function v2 deployed (signature verify + dedup + attachment upload + queue insert), Modal worker scaffold (process_pending_email) verified end-to-end, /inbound/simulate + /inbound/trigger + /inbound/drain routes for local-dev testing. Next: B5 — fill the worker with real classifier / extractor / confidentiality / vectorizer + section-based smart chunking.",
+  charle: "ONE small parallel task: set RESEND_WEBHOOK_SECRET on Supabase Edge Function secrets so signature verification activates. See checklist panel for the exact command. Without this, the Edge Function still works (just skips signature verification with a warning log).",
 };
 
 // ---------- Charle's full checklist (rich HTML in `body`) ----------
 // Update `done: true` as steps complete so Charle can track progress. Set to
 // null to hide the panel entirely.
 const CHARLE_CHECKLIST = {
-  title: "Modal setup checklist",
-  status: "complete ✓",
-  intro: "All steps done — <code>autoci-secrets</code> exists in Modal with 13 keys. The actual <code>modal deploy</code> will run during Sprint D2. Below kept for reference.",
+  title: "Open parallel tasks",
+  status: "1 small task",
+  intro: "Modal setup done ✓. One small new task popped up — see Step 5 below.",
   steps: [
     {
       title: "Step 1 — Account + CLI auth",
@@ -114,6 +114,25 @@ CAL_COM_USERNAME</code></pre>
         <p>Reply in chat with "Modal ready" or paste the <code>modal secret list</code> output. Claude will then reference the <code>autoci-secrets</code> name in <code>modal_config.py</code> when Sprint D2 starts.</p>
       `,
     },
+    {
+      title: "Step 5 (NEW) — Set RESEND_WEBHOOK_SECRET on Supabase Edge Functions",
+      meta: "2 min · optional",
+      done: false,
+      body: `
+        <p>The Edge Function (Supabase) needs the Resend webhook signing secret to verify inbound webhooks. Without this, signature verification is skipped (logged as a warning) — works for testing, fails closed for production.</p>
+        <p><strong>Option A — via Supabase dashboard</strong>:</p>
+        <ol>
+          <li>Go to <a href="https://supabase.com/dashboard/project/orxdunrevazwpyzkoaob/settings/edge-functions" target="_blank" rel="noopener">Project Settings → Edge Functions → Secrets</a></li>
+          <li>Add a secret named <code>RESEND_WEBHOOK_SECRET</code> with the value <code>whsec_uUNBFija+ogyvI9AgUqXZehpDureNVo+</code></li>
+          <li>Save. Existing function picks it up on next invocation.</li>
+        </ol>
+        <p><strong>Option B — via the Supabase CLI</strong> (if installed):</p>
+        <pre><code>supabase secrets set RESEND_WEBHOOK_SECRET=whsec_uUNBFija+ogyvI9AgUqXZehpDureNVo+ \\
+  --project-ref orxdunrevazwpyzkoaob</code></pre>
+        <p>Once set, the Edge Function logs will show <code>signature OK svix-id=...</code> on each verified inbound; if a real Resend webhook fails verification it'll return 401.</p>
+        <div class="checklist-callout">Skippable for now — local dev and the simulate-inbound endpoint don't need it. Worth doing before the live Resend round-trip in the demo.</div>
+      `,
+    },
   ],
 };
 
@@ -135,13 +154,13 @@ const SPRINTS = [
     id: "B",
     label: "Brief-required closures",
     status: "in_progress",
-    progress: 0.40,
+    progress: 0.55,
     substeps: [
       { id: "B1", label: "Query Planner + sql_templates + SQL exec + 4-layer safety", status: "done" },
       { id: "B2", label: "Citation chip system + CitationDrawer + QueryTransformationCard + ChatPanel", status: "done" },
       { id: "B-emb", label: "(slot-in) Embedding switch: OpenAI ada-002 (1536-d) → bge-small-en-v1.5 (384-d). Free, local. Migration 006 applied; 213 chunks re-embedded; RAG smoke test passes.", status: "done" },
       { id: "B3", label: "Knowledge Sources Panel + /sources route", status: "done" },
-      { id: "B4", label: "Edge Function (dumb pipe) + Modal worker scaffold", status: "pending" },
+      { id: "B4", label: "Edge Function v2 + Modal worker scaffold + /inbound/simulate + /inbound/trigger + /inbound/drain", status: "done" },
       { id: "B5", label: "Modal worker filling — classifier + extractor + confidentiality + vectorizer", status: "pending" },
       { id: "B6", label: "Resend send wrapper", status: "pending" },
       { id: "B7", label: "cal.com slot wrapper", status: "pending" },
@@ -179,6 +198,7 @@ const SPRINTS = [
 // ---------- Changelog (most recent first) ----------
 // kind: 'shipped' | 'progress' | 'cut' | 'decision' | 'infra'
 const CHANGELOG = [
+  { date: "2026-05-03", kind: "shipped", text: "Sprint B4 done — Edge Function v2 deployed (signature verify + svix-id dedup + Storage upload + queue insert), Modal worker scaffold (process_pending_email) verified end-to-end, /inbound/simulate + /inbound/trigger + /inbound/drain routes for local-dev testing." },
   { date: "2026-05-03", kind: "shipped", text: "Sprint B3 done — /sources route + KnowledgeSourcesPanel modal. Live data: 6 corpora, 213 chunks, 10 surfaced SQL tables, ~830+ rows. Closes the '≥3 structured documents visibility' brief requirement." },
   { date: "2026-05-03", kind: "shipped", text: "CONTEXT/presentation_prep.md seeded — Q&A pre-emption doc with the LangChain framing, embedding choice, DeepSeek choice, pgvector choice, SQL injection answer, HITL rationale. Grow as more decisions land." },
   { date: "2026-05-03", kind: "shipped", text: "Embedding switch complete: 213 chunks re-embedded with bge-small-en-v1.5 in 51.7s, zero failures. End-to-end RAG smoke test: 'What is DMAIC?' matches the overview chunk at 0.749 similarity." },
@@ -267,7 +287,7 @@ const NODES_RAW = [
   ['routes', 'r_cand',     '/candidates/*',                        'todo',    'M',  '6'],
   ['routes', 'r_cis',      '/cis/scope + /cis/run',                'todo',    'M',  '7'],
   ['routes', 'r_intv',     '/interventions',                       'todo',    'S',  '7'],
-  ['routes', 'r_inbound',  '/simulate-inbound',                    'todo',    'S',  '6'],
+  ['routes', 'r_inbound',  '/inbound/simulate + trigger + drain',  'done',    '',   'B4'],
 
   // SPECIALISTS
   ['specialists', 's1_new',   'S1 QueryPlanner',                  'done',    '',   'B1'],
@@ -306,10 +326,10 @@ const NODES_RAW = [
   ['workflow', 'sse_infra', 'SSE infra + HITL queue',             'done',    '',   '4'],
 
   // EDGE
-  ['edge', 'ef_inbound',    'inbound-email receiver (dumb pipe)', 'todo',    'M',  '6'],
+  ['edge', 'ef_inbound',    'inbound-email receiver (dumb pipe)', 'done',    '',   'B4'],
 
   // WORKER
-  ['worker', 'w_processor', 'inbound_processor.py',               'todo',    'M',  '6'],
+  ['worker', 'w_processor', 'inbound_processor.py (B4 scaffold)', 'wip',     'M',  'B5'],
   ['worker', 'w_cv_cls',    'S5 CV classifier (.docx)',           'todo',    'S',  '6'],
   ['worker', 'w_cv_ext',    'S6 CV extractor (python-docx)',      'todo',    'M',  '6'],
   ['worker', 'w_conf',      'S7 Confidentiality classifier',      'todo',    'S',  '6'],
