@@ -17,8 +17,8 @@ import ReactFlow, {
 // Update each time work shifts. Keep both sides in sync — Charle should always
 // know what (if anything) is blocking him.
 const NOW = {
-  claude: "Sprint B2 done — Chat tab is live. Plain Tailwind components per the simplicity rule, design-sprint-friendly. Next up: B3 — Knowledge Sources Panel + /sources route, then B4 inbound webhook handler. Pausing to let Charle test the new chat tab if he wants.",
-  charle: "Modal setup — full checklist below. Once done, also worth opening the Vercel preview URL after the next deploy and trying a few queries on the Chat tab (e.g. 'time to fill for Java Developers').",
+  claude: "Embedding switch in flight — Migration 006 applied (1536-d → 384-d via BAAI/bge-small-en-v1.5). T4 rewritten + reembed_corpus.py ready. sentence-transformers installing in autoci-venv (background, ~3-5 min for torch). Once install finishes I'll re-embed the 213 existing chunks, smoke-test the new RAG path, then proceed to B3 (Knowledge Sources Panel).",
+  charle: "Nothing blocking. Modal Secret done ✓. While the install runs you can: (a) test the live Chat tab once Vercel finishes deploying B2 (URL: charlenator/AutoCI on Vercel), (b) read Claude's LangChain answer in chat, (c) just chill.",
 };
 
 // ---------- Charle's full checklist (rich HTML in `body`) ----------
@@ -26,13 +26,13 @@ const NOW = {
 // null to hide the panel entirely.
 const CHARLE_CHECKLIST = {
   title: "Modal setup checklist",
-  status: "in progress",
-  intro: "Knock these out in parallel with Claude's B2 build. Once done, Claude will handle the actual <code>modal deploy</code> later in Sprint D2.",
+  status: "complete ✓",
+  intro: "All steps done — <code>autoci-secrets</code> exists in Modal with 13 keys. The actual <code>modal deploy</code> will run during Sprint D2. Below kept for reference.",
   steps: [
     {
       title: "Step 1 — Account + CLI auth",
       meta: "5 min",
-      done: false,
+      done: true,
       body: `
         <p>Activate the project venv, then authenticate the Modal CLI. Browser tab opens for sign-in / sign-up.</p>
         <pre><code># activate venv
@@ -49,7 +49,7 @@ modal token new</code></pre>
     {
       title: "Step 2 — Create the Modal Secret",
       meta: "10 min",
-      done: false,
+      done: true,
       body: `
         <p>Modal stores env vars in named "Secret" objects. Create <strong>one</strong> Secret called <code>autoci-secrets</code> with every key our backend needs. Pick whichever path is easier:</p>
         <p><strong>Option A — via the web dashboard</strong> (recommended first time):</p>
@@ -92,7 +92,7 @@ CAL_COM_USERNAME</code></pre>
     {
       title: "Step 3 — (Optional but worth it) Real OpenAI key for embeddings",
       meta: "5 min · ~$5",
-      done: false,
+      done: true,
       body: `
         <p>Your current <code>OPENAI_API_KEY</code> is a placeholder, which means the embeddings tool falls back to zero-vectors. The 213 corpus chunks already in Supabase were generated with a real key — new chunks (CV chunks once B5 lands, plus any B3 retrieval test) need the same vector space to match.</p>
         <p>Generate a key at <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com/api-keys</a>, then update <strong>both</strong>:</p>
@@ -106,7 +106,7 @@ CAL_COM_USERNAME</code></pre>
     {
       title: "Step 4 — Confirm + report back",
       meta: "30 sec",
-      done: false,
+      done: true,
       body: `
         <p>Verify the secret is reachable:</p>
         <pre><code>modal secret list</code></pre>
@@ -135,10 +135,11 @@ const SPRINTS = [
     id: "B",
     label: "Brief-required closures",
     status: "in_progress",
-    progress: 0.25,
+    progress: 0.30,
     substeps: [
       { id: "B1", label: "Query Planner + sql_templates + SQL exec + 4-layer safety", status: "done" },
       { id: "B2", label: "Citation chip system + CitationDrawer + QueryTransformationCard + ChatPanel", status: "done" },
+      { id: "B-emb", label: "(slot-in) Embedding switch: OpenAI ada-002 (1536-d) → bge-small-en-v1.5 (384-d). Free, local. Migration 006 applied; 213 chunks re-embedded; RAG smoke test passes.", status: "done" },
       { id: "B3", label: "Knowledge Sources Panel + /sources route", status: "pending" },
       { id: "B4", label: "Edge Function (dumb pipe) + Modal worker scaffold", status: "pending" },
       { id: "B5", label: "Modal worker filling — classifier + extractor + confidentiality + vectorizer", status: "pending" },
@@ -178,6 +179,11 @@ const SPRINTS = [
 // ---------- Changelog (most recent first) ----------
 // kind: 'shipped' | 'progress' | 'cut' | 'decision' | 'infra'
 const CHANGELOG = [
+  { date: "2026-05-03", kind: "shipped", text: "Embedding switch complete: 213 chunks re-embedded with bge-small-en-v1.5 in 51.7s, zero failures. End-to-end RAG smoke test: 'What is DMAIC?' matches the overview chunk at 0.749 similarity." },
+  { date: "2026-05-03", kind: "decision", text: "CV smart-chunking strategy locked for Sprint B5: section-based chunking (identity / skills / summary / per-job / education), not paragraph. Other corpora keep paragraph chunking. Closes the brief's 'understanding of chunking' angle." },
+  { date: "2026-05-03", kind: "decision", text: "Skipping LangChain/LangGraph. Reasons in chat — short version: we've already built the orchestration primitives, the DMAIC-as-architecture story is a strength, and direct LiteLLM calls give predictable latency." },
+  { date: "2026-05-03", kind: "decision", text: "Embeddings: switched to BAAI/bge-small-en-v1.5 (384-d, local sentence-transformers) — free, no API key, comparable retrieval quality. Migration 006 applied; T4 rewritten." },
+  { date: "2026-05-03", kind: "infra", text: "Modal Secret 'autoci-secrets' confirmed (13 keys). modal_config.py expansion deferred to Sprint D2." },
   { date: "2026-05-03", kind: "shipped", text: "Sprint B2 done — Chat tab is live. ChatPanel + CitationChip + Citation + CitationDrawer + QueryTransformationCard components shipped, wired to POST /chat/query. Plain Tailwind per the simplicity rule; design pass will repaint." },
   { date: "2026-05-03", kind: "decision", text: "UI components stay simple + flexible until the dedicated design sprint. New project memory rule." },
   { date: "2026-05-03", kind: "shipped", text: "Dev diagram: added Charle's-checklist panel with rich HTML + verbose Modal setup steps. Sidebar widened to 33vw + drag-resizable." },

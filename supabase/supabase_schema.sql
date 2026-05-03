@@ -225,7 +225,7 @@ CREATE TABLE corpus_chunks (
     corpus_name TEXT NOT NULL,       -- e.g., 'lss_case_studies', 'role_benchmarks', 'cvs', 'jds', 'inbound_emails', 'event_summaries'
     chunk_text TEXT NOT NULL,
     metadata JSONB DEFAULT '{}',    -- e.g., {"candidate_id": "...", "role": "Java Developer"}
-    embedding VECTOR(1536) NOT NULL,
+    embedding VECTOR(384),           -- Migration 006: BAAI/bge-small-en-v1.5 (was VECTOR(1536) on OpenAI ada-002)
     confidential BOOLEAN DEFAULT false, -- Migration 004: filtered out by match_chunks RPC by default
     created_at TIMESTAMPTZ DEFAULT NOW()
 );

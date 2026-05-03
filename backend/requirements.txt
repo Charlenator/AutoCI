@@ -10,5 +10,15 @@ numpy
 python-dotenv
 sse-starlette
 apscheduler
-openai
 python-multipart
+
+# Embeddings (Migration 006: switched from OpenAI ada-002 to local bge-small-en-v1.5).
+# sentence-transformers pulls in torch; ~500MB image cost on Modal but free
+# at runtime. cpu-only torch is fine for our scale.
+sentence-transformers>=2.7,<3
+torch>=2.0  # CPU build is sufficient
+# OpenAI client retained in case we ever swap back; not required for embeddings.
+openai
+
+# CV ingestion (Sprint B5 — .docx-only POC; PDF support deferred to ROADMAP)
+python-docx>=1.0,<2

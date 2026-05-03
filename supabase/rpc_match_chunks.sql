@@ -1,12 +1,15 @@
 -- pgvector `match_chunks` RPC — cosine similarity search over corpus_chunks.
--- Updated 2026-05-03 (Migration 004): added `include_confidential` parameter.
+-- Updated 2026-05-03 (Migration 006): embeddings are now 384-d via BAAI/bge-small-en-v1.5
+-- (free, locally-runnable). Was 1536-d via OpenAI text-embedding-ada-002.
+-- Migration 004 added the `include_confidential` parameter.
+--
 -- Confidential rows are excluded by default so RAG retrieval respects privacy
 -- on CV/email-summary corpora. Pass `include_confidential := true` only for
 -- authorized read paths (recruiter UI with proper auth).
 --
 -- Usage:
 --   SELECT * FROM match_chunks(
---     query_embedding := openai_embed('what slows down hiring'),
+--     query_embedding := '[0.1, ...]'::vector,  -- 384-d
 --     match_threshold := 0.7,
 --     match_count     := 5,
 --     corpus_filter   := 'cvs',                -- optional
@@ -14,7 +17,7 @@
 --   );
 
 CREATE OR REPLACE FUNCTION match_chunks(
-    query_embedding VECTOR(1536),
+    query_embedding VECTOR(384),
     match_threshold FLOAT DEFAULT 0.7,
     match_count INT DEFAULT 5,
     corpus_filter TEXT DEFAULT NULL,
