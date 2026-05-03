@@ -192,7 +192,7 @@ graph TB
 | Frontend | Chat tab | 📋 | S | 5 | Repurpose existing dashboard chat panel |
 | Frontend | QueryTransformationCard | 📋 | S | 5 | New SSE event consumer |
 | Frontend | CitationDrawer | 📋 | M | 5 | Source-type-aware rendering |
-| Frontend | KnowledgeSourcesPanel | 📋 | S | 5 | Inventory view |
+| Frontend | KnowledgeSourcesPanel | ✅ | — | B3 | Modal triggered from chat header — 6 corpora + 10 SQL tables visible |
 | Frontend | CandidateSearch tab | 📋 | M | 6 | Free-text search + table (JD-paste fan-out → ROADMAP) |
 | Frontend | SlotGrid | 📋 | M | 6 | 14-day cal.com slot grid |
 | Frontend | CIS tab | 📋 | M | 7 | Scope chat + tool selector + run |
@@ -211,7 +211,7 @@ graph TB
 | Routes | /knowledge/seed + /knowledge/update | ✅ | — | — | |
 | Routes | /rag/ingest | ✅ | — | — | |
 | Routes | /health | ✅ | — | — | |
-| Routes | /sources | 📋 | S | 5 | |
+| Routes | /sources | ✅ | — | B3 | Returns corpus + SQL table inventory; cached 60s |
 | Routes | /candidates/* | 📋 | M | 6 | search + cv + schedule |
 | Routes | /cis/scope + /cis/run | 📋 | M | 7 | |
 | Routes | /interventions | 📋 | S | 7 | |

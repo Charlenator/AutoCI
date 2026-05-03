@@ -17,8 +17,8 @@ import ReactFlow, {
 // Update each time work shifts. Keep both sides in sync — Charle should always
 // know what (if anything) is blocking him.
 const NOW = {
-  claude: "Embedding switch DONE (213 chunks re-embedded with bge-small-en-v1.5, RAG smoke test passed at 0.749 similarity). Starting Sprint B3 — Knowledge Sources Panel + /sources route. Will inventory every corpus + queryable SQL table for the panel. Effort: S.",
-  charle: "Nothing blocking. The presentation Q&A doc is now seeded at CONTEXT/presentation_prep.md — open it any time you want to add talking points or pre-empt reviewer questions. Optional: try the Chat tab on the deployed Vercel URL — embeddings + Citation Drawer should both work now.",
+  claude: "Sprint B3 done — /sources route + KnowledgeSourcesPanel modal shipped. Live data: 6 corpora / 213 chunks / 10 SQL tables visible. Next up: B4 (Edge Function dumb pipe) + scaffolding the Modal worker for the inbound CV pipeline. After that B5 fills the worker (classifier / extractor / confidentiality / vectorizer / smart-chunking).",
+  charle: "Nothing blocking. After the next Vercel deploy lands, the Chat tab will have a 'Browse knowledge sources' link in the header — opens a panel listing every corpus + queryable table with row counts and samples. Closes the brief's '≥3 structured docs visibility' requirement.",
 };
 
 // ---------- Charle's full checklist (rich HTML in `body`) ----------
@@ -135,12 +135,12 @@ const SPRINTS = [
     id: "B",
     label: "Brief-required closures",
     status: "in_progress",
-    progress: 0.30,
+    progress: 0.40,
     substeps: [
       { id: "B1", label: "Query Planner + sql_templates + SQL exec + 4-layer safety", status: "done" },
       { id: "B2", label: "Citation chip system + CitationDrawer + QueryTransformationCard + ChatPanel", status: "done" },
       { id: "B-emb", label: "(slot-in) Embedding switch: OpenAI ada-002 (1536-d) → bge-small-en-v1.5 (384-d). Free, local. Migration 006 applied; 213 chunks re-embedded; RAG smoke test passes.", status: "done" },
-      { id: "B3", label: "Knowledge Sources Panel + /sources route", status: "pending" },
+      { id: "B3", label: "Knowledge Sources Panel + /sources route", status: "done" },
       { id: "B4", label: "Edge Function (dumb pipe) + Modal worker scaffold", status: "pending" },
       { id: "B5", label: "Modal worker filling — classifier + extractor + confidentiality + vectorizer", status: "pending" },
       { id: "B6", label: "Resend send wrapper", status: "pending" },
@@ -179,6 +179,7 @@ const SPRINTS = [
 // ---------- Changelog (most recent first) ----------
 // kind: 'shipped' | 'progress' | 'cut' | 'decision' | 'infra'
 const CHANGELOG = [
+  { date: "2026-05-03", kind: "shipped", text: "Sprint B3 done — /sources route + KnowledgeSourcesPanel modal. Live data: 6 corpora, 213 chunks, 10 surfaced SQL tables, ~830+ rows. Closes the '≥3 structured documents visibility' brief requirement." },
   { date: "2026-05-03", kind: "shipped", text: "CONTEXT/presentation_prep.md seeded — Q&A pre-emption doc with the LangChain framing, embedding choice, DeepSeek choice, pgvector choice, SQL injection answer, HITL rationale. Grow as more decisions land." },
   { date: "2026-05-03", kind: "shipped", text: "Embedding switch complete: 213 chunks re-embedded with bge-small-en-v1.5 in 51.7s, zero failures. End-to-end RAG smoke test: 'What is DMAIC?' matches the overview chunk at 0.749 similarity." },
   { date: "2026-05-03", kind: "decision", text: "CV smart-chunking strategy locked for Sprint B5: section-based chunking (identity / skills / summary / per-job / education), not paragraph. Other corpora keep paragraph chunking. Closes the brief's 'understanding of chunking' angle." },
@@ -262,7 +263,7 @@ const NODES_RAW = [
   ['routes', 'r_know',     '/knowledge/seed + update',             'done',    '',   '—'],
   ['routes', 'r_rag',      '/rag/ingest',                          'done',    '',   '—'],
   ['routes', 'r_health',   '/health',                              'done',    '',   '—'],
-  ['routes', 'r_sources',  '/sources',                             'todo',    'S',  '5'],
+  ['routes', 'r_sources',  '/sources',                             'done',    '',   'B3'],
   ['routes', 'r_cand',     '/candidates/*',                        'todo',    'M',  '6'],
   ['routes', 'r_cis',      '/cis/scope + /cis/run',                'todo',    'M',  '7'],
   ['routes', 'r_intv',     '/interventions',                       'todo',    'S',  '7'],

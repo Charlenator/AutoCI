@@ -10,6 +10,7 @@ import {
 } from "../../lib/chat-types";
 import CitationChip from "./CitationChip";
 import CitationDrawer from "./CitationDrawer";
+import KnowledgeSourcesPanel from "./KnowledgeSourcesPanel";
 import QueryTransformationCard from "./QueryTransformationCard";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -30,6 +31,7 @@ export default function ChatPanel() {
   const [pending, setPending] = useState(false);
   const [draft, setDraft] = useState("");
   const [activeCitation, setActiveCitation] = useState<{ turnId: string; citationIndex: number } | null>(null);
+  const [sourcesOpen, setSourcesOpen] = useState(false);
   const idCounter = useRef(0);
 
   const newId = useCallback(() => {
@@ -101,6 +103,16 @@ export default function ChatPanel() {
   return (
     <div className="flex h-full">
       <section className="flex-1 min-w-0 flex flex-col">
+        <div className="flex items-center justify-between px-6 py-2 border-b border-gray-200 bg-white">
+          <span className="text-xs uppercase tracking-wide text-gray-500">RAG Chat</span>
+          <button
+            type="button"
+            onClick={() => setSourcesOpen(true)}
+            className="text-xs text-blue-700 hover:text-blue-900 hover:underline"
+          >
+            Browse knowledge sources
+          </button>
+        </div>
         <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4">
           {turns.length === 0 && (
             <EmptyState />
@@ -156,6 +168,10 @@ export default function ChatPanel() {
           onClose={() => setActiveCitation(null)}
         />
       )}
+      <KnowledgeSourcesPanel
+        open={sourcesOpen}
+        onClose={() => setSourcesOpen(false)}
+      />
     </div>
   );
 }

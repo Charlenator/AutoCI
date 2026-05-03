@@ -7,7 +7,7 @@ from supabase import create_client
 from api.tools.t3_litellm_router import LiteLLMRouter
 from api.workflows.o2_meta_orchestrator import MetaOrchestrator
 from api.tools.t4_embeddings import EmbeddingService
-from api.routes import trigger, stream, chat, metrics, rag, knowledge, sessions
+from api.routes import trigger, stream, chat, metrics, rag, knowledge, sessions, sources
 from api.routes.knowledge import seed_rag_corpus
 
 load_dotenv()
@@ -70,6 +70,7 @@ app.include_router(chat.router, prefix="/chat", tags=["Chat"])
 app.include_router(metrics.router, prefix="/metrics", tags=["Metrics"])
 app.include_router(rag.router, prefix="/rag", tags=["RAG"])
 app.include_router(knowledge.router, prefix="/knowledge", tags=["Knowledge"])
+app.include_router(sources.router, prefix="/sources", tags=["Sources"])
 
 
 @app.get("/health", tags=["Health"])
