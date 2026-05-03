@@ -17,7 +17,7 @@ import ReactFlow, {
 // Update each time work shifts. Keep both sides in sync — Charle should always
 // know what (if anything) is blocking him.
 const NOW = {
-  claude: "B-aug shipped: Query Planner now emits needs_live_search + live_search_sources + live_search_topic. chat.py calls S4.live_augment(topic, sources) which fans out to Tavily/News/Adzuna, chunks + embeds + upserts into corpus_chunks (ignore_duplicates so migration 007's UNIQUE content_hash holds), then S2 RAGAgent re-retrieves over the augmented corpus. Per-source counts surface in QueryTransformationCard's 'What we ran' block. Adzuna postings table also moved to upsert/ignore_duplicates. Next: B5 — fill the Modal worker (S5 classifier + S6 .docx extractor + S7 confidentiality + section-based smart-chunking + email vectorizer).",
+  claude: "Modal deployment unblocked: backend/modal_config.py rewritten — single autoci-secrets Secret (was 6 phantoms), pip_install_from_requirements path fixed to deploy from backend/, bge-small-en-v1.5 weights baked into image at build time so cold starts don't re-download 130 MB, and a second Modal function drain_inbound_queue scheduled every 2 minutes that calls inbound_processor.process_all_pending. Modal API surface verified against installed modal 1.4.2 (add_local_python_source, run_commands, Period all present). Charle still owes: deploy + Vercel NEXT_PUBLIC_API_URL + Edge Function RESEND_WEBHOOK_SECRET + smoke. Implementation work for the rest (B5/B6/B7/B8) continues separately.",
   charle: "Two optional parallel tasks (non-blocking): (1) Set RESEND_WEBHOOK_SECRET on Supabase Edge Function secrets (Step 5 below). (2) Generate more CV variety if you want edge cases to test. Otherwise just chill until next session — fresh context, clean state.",
 };
 
@@ -185,14 +185,15 @@ const SPRINTS = [
   {
     id: "D",
     label: "Deploy + submit",
-    status: "pending",
-    progress: 0,
+    status: "in_progress",
+    progress: 0.25,
     substeps: [
       { id: "D1", label: "Vercel frontend deploy (auto on push)", status: "in_progress" },
-      { id: "D2", label: "Modal backend deploy", status: "pending" },
+      { id: "D2", label: "Modal backend deploy — modal_config.py rewritten (single autoci-secrets, weights baked into image, scheduled drain_inbound_queue every 2 min)", status: "in_progress" },
       { id: "D3", label: "Edge Function deploy + Resend webhook URL", status: "done" },
-      { id: "D4", label: "Prod smoke test", status: "pending" },
-      { id: "D5", label: "Submission deliverables", status: "pending" },
+      { id: "D4", label: "Set NEXT_PUBLIC_API_URL on Vercel + RESEND_WEBHOOK_SECRET on Edge Function", status: "pending" },
+      { id: "D5", label: "Prod smoke test (chat + real email round-trip)", status: "pending" },
+      { id: "D6", label: "Submission deliverables", status: "pending" },
     ],
   },
 ];
@@ -200,6 +201,7 @@ const SPRINTS = [
 // ---------- Changelog (most recent first) ----------
 // kind: 'shipped' | 'progress' | 'cut' | 'decision' | 'infra'
 const CHANGELOG = [
+  { date: "2026-05-03", kind: "shipped", text: "Modal deployment unblocked — backend/modal_config.py rewritten end-to-end. Three fixes: (1) replaced six phantom Secret.from_name calls with the single autoci-secrets Secret that's already provisioned. (2) Switched pip_install_from_requirements to a path that resolves when running `cd backend && modal deploy modal_config.py`, plus added .add_local_python_source('main', 'api') so the FastAPI app + every route + every agent + the inbound worker land in the container. (3) Added .run_commands() to bake the BAAI/bge-small-en-v1.5 weights into the image at build time — cold starts now skip the ~130 MB download. ALSO added a second Modal entry-point: drain_inbound_queue, schedule=modal.Period(minutes=2), calling inbound_processor.process_all_pending(). With the B4 stub in place it's enough to demo the inbound flow end-to-end on prod; B5 fills the real classifier/extractor body separately. Modal API surface verified against the installed modal 1.4.2." },
   { date: "2026-05-03", kind: "shipped", text: "B-aug shipped — Query Planner JSON envelope gains needs_live_search + live_search_sources + live_search_topic. The sanitizer auto-fills sources to all three when the planner forgets, defaults the topic to the original query, and forces needs_rag=true so the augmented corpus actually gets read. chat.py adds a step before SQL/RAG: instantiate ResearchAgent, call live_augment(topic, sources), the agent fans out to Tavily/News/Adzuna and persists results via upsert(...ignore_duplicates=True) on both corpus_chunks (on_conflict=content_hash) and adzuna_postings (on_conflict=adzuna_id). The chat response now carries a live_search dict the QueryTransformationCard renders as a per-source count line in the 'What we ran' block. Closes the brief's 'trigger live web search when the question implies recent / current data' gap." },
   { date: "2026-05-03", kind: "shipped", text: "B-evidence shipped — SQLTemplate gains optional build_evidence(); ExecutorResult carries evidence_sql + evidence_rows + evidence_error; chat.py forwards them; Citation drawer renders an expandable 'Source records (N)' section under the aggregate, with its own Source SQL toggle. Wired for time_to_fill, offer_acceptance_rate, conversion_rate, kpis_for_role, pipeline_volume_by_stage. Already-record-level templates (candidate_search_by_skill, candidate_by_email, industry_benchmark_for_role) intentionally have no evidence path. Unit-test coverage added in test_all.py. Closes Charle's last ask before the prior handoff." },
   { date: "2026-05-03", kind: "decision", text: "B-evidence added to plan (next-session priority): templates get an optional build_evidence() that returns the *underlying source rows* (the 3 hires that produced the 83.3-day average), not just the aggregate. Citation Drawer renders both. Stronger 'source traceability' demo." },

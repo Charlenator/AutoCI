@@ -291,11 +291,13 @@ Each task tagged with relative effort (XS / S / M / L / XL). Anchors:
 
 | Task | Effort | Notes |
 |---|---|---|
-| Vercel deploy of Next.js shell | S | Env-only config; `NEXT_PUBLIC_API_URL` to Modal endpoint. |
-| Modal deploy of FastAPI backend | M | Verify secrets, Supabase connectivity, SSE through proxy. |
-| Edge Function deploy + Resend webhook URL config | S | Point Resend inbound at the deployed Edge Function. |
-| Smoke-test full flow on prod | S | All 3 interfaces + email round-trip. |
-| Lock down: no localhost in committed code | XS | Audit + replace with env vars. |
+| Vercel deploy of Next.js shell | ⚙️ S | Auto-deploys on push. Needs `NEXT_PUBLIC_API_URL` set to the Modal URL after the backend is live. |
+| Modal `modal_config.py` rewritten | ✅ M | Three fixes: single `autoci-secrets` Secret (was 6 phantoms), `pip_install_from_requirements` path matched to a `cd backend && modal deploy modal_config.py` flow, `bge-small-en-v1.5` weights baked into the image at build time so cold starts skip the ~130 MB download. ALSO added a second Modal entry-point: `drain_inbound_queue`, `schedule=modal.Period(minutes=2)`, calling `inbound_processor.process_all_pending()` — that's the prod trigger that turns Resend → Edge Function → row inserts into actual processing. With B4's stub in place it's enough to demo the flow end-to-end; B5 fills the real classifier/extractor body separately. Modal API surface verified against the installed modal 1.4.2. |
+| `modal deploy backend/modal_config.py` (Charle's hand) | ⏳ XS | Run from `backend/`. First image build takes ~5-10 min (torch + sentence-transformers + the weight bake); subsequent re-deploys are seconds. Note the public URL — pattern `https://<username>--autoci-backend-fastapi-app.modal.run`. |
+| Edge Function deploy + Resend webhook URL config | ✅ S | Inbound webhook deployed; `RESEND_WEBHOOK_SECRET` still pending Charle's-hand setup on Supabase Edge Function secrets. |
+| Set `NEXT_PUBLIC_API_URL` on Vercel + redeploy | ⏳ XS | Charle's-hand, after the Modal URL is known. |
+| Smoke-test full flow on prod | ⏳ S | `/health` + `/sources` + `/chat/query` against the Modal URL; one real Resend email round-trip to confirm the scheduled drainer flips a row from `pending` → `processed`/`not_cv`. |
+| Lock down: no localhost in committed code | XS | Audit + replace with env vars. (Frontend already does this via `NEXT_PUBLIC_API_URL`; backend's CORS still uses `allow_origins=["*"]` — fine for the demo, tighten later.) |
 
 ### Phase 9 — Submission deliverables
 

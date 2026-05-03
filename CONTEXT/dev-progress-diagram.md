@@ -264,9 +264,9 @@ graph TB
 | External | DeepSeek, OpenAI, Adzuna, Tavily, NewsAPI | ✅ | — | — | |
 | External | Resend (send + inbound) | 📋 | S | 6 | Domain already verified |
 | External | cal.com (slot lookup) | 📋 | S | 6 | Free tier |
-| Deploy | Vercel | 📋 | S | 8 | |
-| Deploy | Modal | 📋 | M | 8 | |
-| Deploy | Edge Function deploy | 📋 | S | 8 | |
+| Deploy | Vercel | ⚙️ | S | 8 | Auto-deploys on push; needs `NEXT_PUBLIC_API_URL` set after Modal URL is known |
+| Deploy | Modal — modal_config.py | ✅ | M | 8 | Single `autoci-secrets`; bge-small weights baked into image; `drain_inbound_queue` scheduled every 2 min; deploy with `cd backend && modal deploy modal_config.py` |
+| Deploy | Edge Function deploy | ✅ | S | 8 | Inbound webhook deployed; `RESEND_WEBHOOK_SECRET` still pending on Charle's side |
 | Deploy | Submission deliverables | 📋 | S | 9 | README + screenshots + screen-record |
 
 ---
