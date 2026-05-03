@@ -17,8 +17,8 @@ import ReactFlow, {
 // Update each time work shifts. Keep both sides in sync — Charle should always
 // know what (if anything) is blocking him.
 const NOW = {
-  claude: "Embedding switch in flight — Migration 006 applied (1536-d → 384-d via BAAI/bge-small-en-v1.5). T4 rewritten + reembed_corpus.py ready. sentence-transformers installing in autoci-venv (background, ~3-5 min for torch). Once install finishes I'll re-embed the 213 existing chunks, smoke-test the new RAG path, then proceed to B3 (Knowledge Sources Panel).",
-  charle: "Nothing blocking. Modal Secret done ✓. While the install runs you can: (a) test the live Chat tab once Vercel finishes deploying B2 (URL: charlenator/AutoCI on Vercel), (b) read Claude's LangChain answer in chat, (c) just chill.",
+  claude: "Embedding switch DONE (213 chunks re-embedded with bge-small-en-v1.5, RAG smoke test passed at 0.749 similarity). Starting Sprint B3 — Knowledge Sources Panel + /sources route. Will inventory every corpus + queryable SQL table for the panel. Effort: S.",
+  charle: "Nothing blocking. The presentation Q&A doc is now seeded at CONTEXT/presentation_prep.md — open it any time you want to add talking points or pre-empt reviewer questions. Optional: try the Chat tab on the deployed Vercel URL — embeddings + Citation Drawer should both work now.",
 };
 
 // ---------- Charle's full checklist (rich HTML in `body`) ----------
@@ -179,6 +179,7 @@ const SPRINTS = [
 // ---------- Changelog (most recent first) ----------
 // kind: 'shipped' | 'progress' | 'cut' | 'decision' | 'infra'
 const CHANGELOG = [
+  { date: "2026-05-03", kind: "shipped", text: "CONTEXT/presentation_prep.md seeded — Q&A pre-emption doc with the LangChain framing, embedding choice, DeepSeek choice, pgvector choice, SQL injection answer, HITL rationale. Grow as more decisions land." },
   { date: "2026-05-03", kind: "shipped", text: "Embedding switch complete: 213 chunks re-embedded with bge-small-en-v1.5 in 51.7s, zero failures. End-to-end RAG smoke test: 'What is DMAIC?' matches the overview chunk at 0.749 similarity." },
   { date: "2026-05-03", kind: "decision", text: "CV smart-chunking strategy locked for Sprint B5: section-based chunking (identity / skills / summary / per-job / education), not paragraph. Other corpora keep paragraph chunking. Closes the brief's 'understanding of chunking' angle." },
   { date: "2026-05-03", kind: "decision", text: "Skipping LangChain/LangGraph. Reasons in chat — short version: we've already built the orchestration primitives, the DMAIC-as-architecture story is a strength, and direct LiteLLM calls give predictable latency." },
