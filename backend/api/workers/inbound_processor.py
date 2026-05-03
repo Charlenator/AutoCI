@@ -20,6 +20,8 @@ queuing a row).
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -100,48 +102,18 @@ def process_pending_email(
     except Exception as exc:  # noqa: BLE001
         logger.warning(f"[inbound_processor] could not flip to processing: {exc}")
 
-    # ---- B5 placeholder: real classify/extract/confidentiality/vectorize lands here ----
-    #
-    # For B4, we just inspect what we have and write a stub note. This keeps
-    # the row out of 'pending' so polling-based dispatch can move on, and
-    # gives us something to see in the Candidate Search tab once it's wired
-    # up.
-    has_attachment = bool(row.get("attachment_storage_path"))
-    attach_mime = row.get("attachment_mime") or ""
-    looks_like_docx = attach_mime in (
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/msword",
-    ) or (row.get("attachment_filename") or "").lower().endswith((".docx", ".doc"))
-
-    note = (
-        f"[B4 stub] attachment={'yes' if has_attachment else 'no'} "
-        f"mime={attach_mime or 'n/a'} looks_like_docx={looks_like_docx}. "
-        f"B5 will classify, extract, vectorize."
-    )
-    result.notes.append(note)
-
-    # Tentative classification just based on extension/MIME (real LLM check is B5).
-    tentative_is_cv = bool(has_attachment and looks_like_docx)
-    final_status = "processed" if tentative_is_cv else "not_cv"
-
-    update_payload: dict[str, Any] = {
-        "status": final_status,
-        "classified_as_cv": tentative_is_cv,
-        "processed_at": datetime.now(timezone.utc).isoformat(),
-        "error_log": None,
-    }
-
+    # ---- B5 full pipeline ----
     try:
-        supabase.table("inbound_emails").update(update_payload).eq(
-            "id", inbound_id
-        ).execute()
+        _run_b5_pipeline(row, supabase, result)
     except Exception as exc:  # noqa: BLE001
-        result.error = f"failed to mark final status: {exc}"
+        result.error = f"pipeline error: {exc}"
         result.notes.append(result.error)
+        _update_inbound_final(supabase, inbound_id, "error", None,
+                              error_log=str(exc), result=result)
         return result
 
-    result.final_status = final_status
-    result.classified_as_cv = tentative_is_cv
+    _update_inbound_final(supabase, inbound_id, result.final_status,
+                          result.classified_as_cv, result=result)
     return result
 
 
@@ -178,3 +150,212 @@ def _default_supabase():
         os.environ["SUPABASE_URL"],
         os.environ["SUPABASE_SERVICE_KEY"],
     )
+
+
+# ── B5 pipeline steps ──────────────────────────────────────────────────────
+
+
+def _run_b5_pipeline(row: dict, supabase: Any, result: ProcessResult) -> None:
+    """Run the full B5 pipeline steps 1–6, mutating `result` in place.
+
+    The caller handles final update + outer exception catch. We raise on any
+    unrecoverable error so the caller sets status='error'.
+    """
+    inbound_id = row["id"]
+    sender = (row.get("sender") or "").strip()
+    subject = (row.get("subject") or "").strip()
+    body = (row.get("body_text") or "").strip()
+    storage_path = row.get("attachment_storage_path") or ""
+
+    # ── Step 1: Download attachment ────────────────────────────────────
+    docx_bytes: bytes | None = None
+    has_attachment = bool(storage_path)
+
+    if has_attachment:
+        try:
+            resp = supabase.storage.from_("cv-attachments").download(storage_path)
+            docx_bytes = resp
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError(f"storage download failed: {exc}") from exc
+
+    # ── Step 2: Dedup hash ──────────────────────────────────────────────
+    hash_source = f"{sender}-{subject}".lower().encode()
+    if docx_bytes:
+        dedup_hash = hashlib.sha256(hash_source + docx_bytes).hexdigest()
+    else:
+        dedup_hash = hashlib.sha256(hash_source).hexdigest()
+
+    # Check for existing candidate with same hash
+    existing = (
+        supabase.table("candidates")
+        .select("candidate_id")
+        .eq("dedup_hash", dedup_hash)
+        .limit(1)
+        .execute()
+    )
+    if existing.data:
+        result.candidate_id = existing.data[0]["candidate_id"]
+        result.final_status = "processed"
+        result.classified_as_cv = True
+        result.notes.append("duplicate of existing candidate (dedup hash match)")
+        return
+
+    # ── Step 3: Classify ────────────────────────────────────────────────
+    from api.agents.specialists.s5_cv_classifier import CVClassifierAgent
+    from api.tools.t3_litellm_router import LiteLLMRouter
+
+    llm = LiteLLMRouter(supabase_client=supabase)
+    s5 = CVClassifierAgent(llm)
+
+    raw_text_for_classify: str = ""
+    is_docx_attachment = False
+
+    if docx_bytes:
+        # Extract raw text inline for the classifier (S6 would do it again, but
+        # S5 only needs text; we re-extract in S6 for the structured fields).
+        try:
+            from docx import Document as _Doc
+            import io
+            _d = _Doc(io.BytesIO(docx_bytes))
+            raw_text_for_classify = "\n".join(p.text for p in _d.paragraphs if p.text.strip())
+            is_docx_attachment = True
+        except Exception as exc:  # noqa: BLE001
+            # python-docx parse failure — not a proper docx CV
+            raw_text_for_classify = ""
+            result.notes.append(f"classifier: docx parse error ({exc}) — treating as not_cv")
+    else:
+        raw_text_for_classify = body
+
+    s5_result = s5.is_cv(raw_text_for_classify or "")
+    result.notes.append(
+        f"classifier: is_cv={s5_result['is_cv']} conf={s5_result['confidence']} reason={s5_result.get('reason', '')}"
+    )
+
+    if not s5_result["is_cv"]:
+        # ── Step 4b: Not-CV path → vectorize email ─────────────────────
+        from api.workers.email_vectorizer import vectorize_email
+        from api.tools.t4_embeddings import EmbeddingService
+
+        chunks = vectorize_email(subject, body, inbound_id)
+        result.notes.append(f"vectorized email into {len(chunks)} chunks (not_cv)")
+
+        if chunks:
+            _embed_and_upsert_chunks(chunks, EmbeddingService(), supabase)
+
+        result.classified_as_cv = False
+        result.chunk_count = len(chunks)
+        result.final_status = "not_cv"
+        return
+
+    # ── Step 4a: CV path — extract, confidentiality, upsert ────────────
+    from api.agents.specialists.s6_cv_extractor import CVExtractorAgent
+    from api.agents.specialists.s7_confidentiality import ConfidentialityAgent
+    from api.workers.cv_chunking import chunk_cv
+    from api.tools.t4_embeddings import EmbeddingService
+
+    s6 = CVExtractorAgent(llm)
+    record = s6.extract(docx_bytes) if docx_bytes else {
+        "name": None, "email": None, "phone": None, "summary": None,
+        "skills": [], "experience": [], "education": [],
+        "missing_fields": ["name", "email", "phone", "summary", "skills",
+                           "experience", "education"],
+        "raw_text": raw_text_for_classify,
+    }
+    missing = record.get("missing_fields") or []
+    result.notes.append(
+        f"extractor: {len(record.get('skills') or [])} skills, "
+        f"{len(record.get('experience') or [])} exp items, "
+        f"{len(record.get('education') or [])} edu items"
+        + (f" (missing: {missing})" if missing else "")
+    )
+
+    s7 = ConfidentialityAgent(llm)
+    confidentiality = s7.classify(record.get("raw_text") or "")
+    result.notes.append(
+        f"confidentiality: {confidentiality['confidential']} ({confidentiality.get('reason', '')})"
+    )
+
+    # Upsert candidates row
+    candidate_payload = {
+        "name": record.get("name"),
+        "email": record.get("email"),
+        "phone": record.get("phone"),
+        "experience_summary": record.get("summary"),
+        "skills_json": json.dumps(record.get("skills") or []),
+        "missing_fields_json": json.dumps(missing) if missing else None,
+        "cv_storage_path": storage_path or None,
+        "dedup_hash": dedup_hash,
+        "confidential": confidentiality["confidential"],
+        "source_email_id": inbound_id,
+        "source_channel": "email",
+        "applied_date": datetime.now(timezone.utc).date().isoformat(),
+    }
+    cand_resp = (
+        supabase.table("candidates")
+        .insert(candidate_payload)
+        .execute()
+    )
+    cand_data = cand_resp.data or []
+    if not cand_data:
+        raise RuntimeError("candidates insert returned no rows")
+    candidate_id = cand_data[0]["candidate_id"]
+    result.candidate_id = candidate_id
+
+    # Chunk + embed + upsert corpus_chunks
+    chunks = chunk_cv(record, candidate_id)
+    result.notes.append(f"chunked into {len(chunks)} CV sections")
+
+    if chunks:
+        _embed_and_upsert_chunks(chunks, EmbeddingService(), supabase)
+
+    result.classified_as_cv = True
+    result.chunk_count = len(chunks)
+    result.final_status = "processed"
+
+
+def _embed_and_upsert_chunks(
+    chunks: list[dict],
+    embedder: Any,
+    supabase: Any,
+) -> None:
+    """Embed chunk_text and upsert to corpus_chunks with ignore_duplicates."""
+    texts = [c["chunk_text"] for c in chunks]
+    embeddings = embedder.embed_batch(texts)
+
+    for chunk, emb in zip(chunks, embeddings):
+        meta = chunk.get("metadata") or {}
+        supabase.table("corpus_chunks").upsert({
+            "corpus_name": chunk["corpus_name"],
+            "chunk_text": chunk["chunk_text"],
+            "metadata": json.dumps(meta),
+            "embedding": emb,
+            "confidential": meta.get("confidential", True),
+        }, on_conflict="content_hash", ignore_duplicates=True).execute()
+
+
+def _update_inbound_final(
+    supabase: Any,
+    inbound_id: str,
+    final_status: str,
+    classified_as_cv: bool | None,
+    *,
+    error_log: str | None = None,
+    result: ProcessResult | None = None,
+) -> None:
+    """Update the inbound_emails row with final status + timestamps."""
+    update_payload: dict[str, Any] = {
+        "status": final_status,
+        "classified_as_cv": classified_as_cv,
+        "processed_at": datetime.now(timezone.utc).isoformat(),
+        "error_log": error_log,
+    }
+    if result and result.candidate_id:
+        update_payload["candidate_id"] = result.candidate_id
+
+    try:
+        supabase.table("inbound_emails").update(update_payload).eq(
+            "id", inbound_id
+        ).execute()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"[inbound_processor] failed final status update: {exc}")
+        raise

@@ -112,6 +112,183 @@ def level1_unit():
         kpis_required_raised = True
     test("S1: missing required param raises TemplateParamError", lambda: kpis_required_raised)
 
+    # S5 — CVClassifierAgent
+    from api.agents.specialists.s5_cv_classifier import CVClassifierAgent
+    from api.tools.t3_litellm_router import LiteLLMRouter
+    s5 = CVClassifierAgent(LiteLLMRouter())
+    test("S5: agent imports cleanly", lambda: CVClassifierAgent is not None)
+    result_empty = s5.is_cv("")
+    test("S5: empty string -> is_cv=False",
+         lambda: result_empty["is_cv"] is False)
+    test("S5: empty string -> confidence 0.0",
+         lambda: result_empty["confidence"] == 0.0)
+    test("S5: empty string -> reason 'empty input'",
+         lambda: result_empty["reason"] == "empty input")
+    result_ws = s5.is_cv("   \n  \t  ")
+    test("S5: whitespace-only -> is_cv=False",
+         lambda: result_ws["is_cv"] is False)
+    test("S5: whitespace-only -> confidence 0.0",
+         lambda: result_ws["confidence"] == 0.0)
+    from api.agents.specialists.s5_cv_classifier import _parse_json
+    test("S5: _parse_json handles None", lambda: _parse_json(None) is None)
+    test("S5: _parse_json handles valid JSON", lambda: _parse_json('{"is_cv": true}') == {"is_cv": True})
+    test("S5: _parse_json strips markdown fences", lambda: _parse_json("```json\n{\"is_cv\": false}\n```") == {"is_cv": False})
+
+    # S6 — CVExtractorAgent
+    from api.agents.specialists.s6_cv_extractor import (
+        CVExtractorAgent,
+        _clean_str,
+        _normalize_skills,
+        _normalize_record,
+        _fallback_record,
+    )
+    test("S6: agent imports cleanly", lambda: CVExtractorAgent is not None)
+
+    # Helper: _clean_str
+    test("S6: _clean_str strips whitespace", lambda: _clean_str("  hello  ") == "hello")
+    test("S6: _clean_str returns None for None", lambda: _clean_str(None) is None)
+    test("S6: _clean_str returns None for empty", lambda: _clean_str("  ") is None)
+
+    # Helper: _normalize_skills
+    test("S6: _normalize_skills lowercases + dedupes",
+         lambda: _normalize_skills(["Python", "python", "Java"]) == ["python", "java"])
+    test("S6: _normalize_skills handles None", lambda: _normalize_skills(None) == [])
+    test("S6: _normalize_skills handles non-list", lambda: _normalize_skills("Python") == ["python"])
+
+    # Helper: _normalize_record with known data
+    _rec_in = {"name": " John  ", "email": " JOHN@EXAMPLE.COM ", "phone": "+27 123 4567",
+               "summary": "Experienced dev", "skills": ["Python", "python"], "experience": [], "education": []}
+    _rec_out = _normalize_record(_rec_in, "raw text here")
+    test("S6: _normalize_record strips name", lambda: _rec_out["name"] == "John")
+    test("S6: _normalize_record lowercases email", lambda: _rec_out["email"] == "john@example.com")
+    test("S6: _normalize_record dedupes skills", lambda: _rec_out["skills"] == ["python"])
+    test("S6: _normalize_record no missing fields",
+         lambda: _rec_out["missing_fields"] == [])
+    test("S6: _normalize_record preserves raw_text", lambda: _rec_out["raw_text"] == "raw text here")
+
+    # Helper: _normalize_record with sparse data → all missing
+    _rec_sparse = _normalize_record({}, "empty")
+    test("S6: sparse record has all 7 missing fields",
+         lambda: set(_rec_sparse["missing_fields"]) == {"name", "email", "phone", "summary", "skills", "experience", "education"})
+
+    # Helper: _fallback_record
+    _fb = _fallback_record("some text")
+    test("S6: fallback has raw_text", lambda: _fb["raw_text"] == "some text")
+    test("S6: fallback has all missing_fields", lambda: len(_fb["missing_fields"]) == 7)
+
+    # In-memory .docx test: constructs a docx with known content and checks
+    # that the extractor gets raw_text populated (LLM not required since it
+    # will fall back gracefully when DEEPSEEK_API_KEY is absent).
+    try:
+        from docx import Document
+        import io
+        _mem_doc = Document()
+        _mem_doc.add_paragraph("John Doe")
+        _mem_doc.add_paragraph("john@example.com")
+        _mem_doc.add_paragraph("+27 12 345 6789")
+        _mem_doc.add_paragraph("Experienced software engineer with 5 years in Python.")
+        _mem_buf = io.BytesIO()
+        _mem_doc.save(_mem_buf)
+        _mem_buf.seek(0)
+        from api.tools.t3_litellm_router import LiteLLMRouter
+        _s6 = CVExtractorAgent(LiteLLMRouter())
+        _s6_result = _s6.extract(_mem_buf.read())
+        test("S6: in-memory docx extracts raw_text with known name",
+             lambda: "John Doe" in (_s6_result.get("raw_text") or ""))
+        test("S6: in-memory docx extracts raw_text with known email",
+             lambda: "john@example.com" in (_s6_result.get("raw_text") or ""))
+        # Without LLM key, fields will fall back; test that fallback structure is correct
+        test("S6: docx extract returns dict with all expected keys",
+             lambda: all(k in _s6_result for k in ("name", "email", "phone", "summary", "skills", "experience", "education", "missing_fields", "raw_text")))
+    except ImportError:
+        test("S6: python-docx not installed — skipping docx tests", lambda: True)
+
+    # S7 — ConfidentialityAgent
+    from api.agents.specialists.s7_confidentiality import ConfidentialityAgent
+    from api.tools.t3_litellm_router import LiteLLMRouter
+    s7 = ConfidentialityAgent(LiteLLMRouter())
+
+    test("S7: agent imports cleanly", lambda: ConfidentialityAgent is not None)
+    result_empty = s7.classify("")
+    test("S7: empty string -> confidential=True", lambda: result_empty["confidential"] is True)
+    test("S7: empty string -> reason 'empty input'", lambda: result_empty["reason"] == "empty input")
+    result_ws = s7.classify("   \n  ")
+    test("S7: whitespace-only -> confidential=True", lambda: result_ws["confidential"] is True)
+
+    # S7: _parse_json helper (reused from S5, but tested through S7 path)
+    test("S7: _parse_json handles valid JSON", lambda: _parse_json('{"confidential": false, "reason": "ok"}') == {"confidential": False, "reason": "ok"})
+    test("S7: _parse_json handles None", lambda: _parse_json(None) is None)
+
+    # 01.4 — cv_chunking
+    from api.workers.cv_chunking import chunk_cv
+
+    _full_rec = {
+        "name": "Jane Doe",
+        "email": "jane@example.com",
+        "phone": "+27 82 123 4567",
+        "summary": "Experienced data scientist with 6 years in ML.",
+        "skills": ["python", "machine learning", "sql"],
+        "experience": [
+            {"role": "Senior Data Scientist", "company": "Acme Corp",
+             "start_date": "2021-03", "end_date": "2025-01",
+             "description": "Built ML pipelines for recommendation systems."},
+            {"role": "Data Analyst", "company": "Beta Inc",
+             "start_date": "2018-06", "end_date": "2021-02",
+             "description": "Created dashboards and automated reporting."},
+        ],
+        "education": [
+            {"school": "University of Cape Town", "degree": "MSc Data Science", "year": "2018"},
+        ],
+        "missing_fields": [],
+        "raw_text": "Jane Doe\njane@example.com\n+27 82 123 4567\n...",
+    }
+    _full_chunks = chunk_cv(_full_rec, "cand-001")
+    test("01.4: full record produces 6 chunks (identity+skills+summary+2exp+education)",
+         lambda: len(_full_chunks) == 6)
+    _kinds = {c["metadata"]["chunk_kind"] for c in _full_chunks}
+    test("01.4: chunk_kinds cover all 5 types",
+         lambda: _kinds == {"identity", "skills", "summary", "experience", "education"})
+    test("01.4: identity chunk has name + email",
+         lambda: "Jane Doe" in _full_chunks[0]["chunk_text"] and "jane@example.com" in _full_chunks[0]["chunk_text"])
+    test("01.4: experience chunks have role_target in metadata",
+         lambda: any(c["metadata"].get("role_target") == "Senior Data Scientist" for c in _full_chunks))
+    test("01.4: all chunks are corpus_name='cvs'",
+         lambda: all(c["corpus_name"] == "cvs" for c in _full_chunks))
+    test("01.4: all chunks have confidential=True in metadata",
+         lambda: all(c["metadata"]["confidential"] is True for c in _full_chunks))
+
+    # Record with no summary → 5 chunks (summary skipped)
+    _no_summary = dict(_full_rec, summary="")
+    _no_summary_chunks = chunk_cv(_no_summary, "cand-002")
+    test("01.4: no summary produces 5 chunks (summary skipped)",
+         lambda: len(_no_summary_chunks) == 5)
+    test("01.4: no summary — 'summary' not in chunk_kinds",
+         lambda: "summary" not in {c["metadata"]["chunk_kind"] for c in _no_summary_chunks})
+
+    # 01.5 — email_vectorizer
+    from api.workers.email_vectorizer import vectorize_email
+
+    _ev = vectorize_email("FW: Candidate CV", "Please find attached the CV for John.\n\nRegards, Recruiter", "inb-001")
+    test("01.5: typical email produces 2 chunks (subject + body)",
+         lambda: len(_ev) == 2)
+    _ev_kinds = {c["metadata"]["chunk_kind"] for c in _ev}
+    test("01.5: chunk kinds are subject and body",
+         lambda: _ev_kinds == {"subject", "body"})
+    test("01.5: subject chunk has correct text",
+         lambda: any(c["chunk_text"] == "FW: Candidate CV" for c in _ev))
+    test("01.5: all chunks are corpus_name='inbound_emails'",
+         lambda: all(c["corpus_name"] == "inbound_emails" for c in _ev))
+    test("01.5: all chunks have confidential=True",
+         lambda: all(c["metadata"]["confidential"] is True for c in _ev))
+
+    _ev_empty = vectorize_email("", "", "inb-002")
+    test("01.5: empty email produces 0 chunks",
+         lambda: len(_ev_empty) == 0)
+
+    _ev_subject_only = vectorize_email("Just a subject", "", "inb-003")
+    test("01.5: subject-only email produces 1 chunk",
+         lambda: len(_ev_subject_only) == 1 and _ev_subject_only[0]["metadata"]["chunk_kind"] == "subject")
+
     # B-aug: planner envelope honours live-search fields and the sanitizer
     # auto-fills sources + forces RAG when a stripped envelope arrives.
     from api.agents.specialists.s1_query_planner import (

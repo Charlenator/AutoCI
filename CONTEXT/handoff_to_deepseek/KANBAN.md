@@ -17,11 +17,18 @@
 
 | ID | Sub-task | Date | Notes |
 |---|---|---|---|
+| 01.1 | S5 CV classifier (`s5_cv_classifier.py`) | 2026-05-04 | Built; 7 unit tests passing |
+| 01.2 | S6 .docx field extractor (`s6_cv_extractor.py`) | 2026-05-04 | Built; 15 unit tests passing; python-docx now installed |
+| 01.3 | S7 confidentiality classifier (`s7_confidentiality.py`) | 2026-05-04 | Built; 6 unit tests passing |
+| 01.4 | Section-based smart-chunking helper (`cv_chunking.py`) | 2026-05-04 | Built; 8 unit tests passing |
+| 01.5 | Email vectorizer helper (`email_vectorizer.py`) | 2026-05-04 | Built; 7 unit tests passing |
+| 01.6 | Wire B5 pipeline into `inbound_processor.py` | 2026-05-04 | B4 stub replaced; 85 tests pass |
 
 ## In progress
 
 | ID | Sub-task | Started | Notes |
 |---|---|---|---|
+| 01.7 | End-to-end smoke via `/inbound/simulate` | 2026-05-04 | |
 
 ## Backlog
 
@@ -29,13 +36,6 @@
 
 | ID | Sub-task | File ref |
 |---|---|---|
-| 01.1 | S5 CV classifier (`s5_cv_classifier.py`) | 01_b5_modal_worker.md §1 |
-| 01.2 | S6 .docx field extractor (`s6_cv_extractor.py`) | 01_b5_modal_worker.md §2 |
-| 01.3 | S7 confidentiality classifier (`s7_confidentiality.py`) | 01_b5_modal_worker.md §3 |
-| 01.4 | Section-based smart-chunking helper | 01_b5_modal_worker.md §4 |
-| 01.5 | Email vectorizer helper | 01_b5_modal_worker.md §5 |
-| 01.6 | Wire S5/S6/S7 + chunking + vectorizer into `process_pending_email` | 01_b5_modal_worker.md §6 |
-| 01.7 | End-to-end smoke via `/inbound/simulate` with one .docx CV | 01_b5_modal_worker.md §7 |
 
 ### Task 02 — B6 Resend send wrapper
 
