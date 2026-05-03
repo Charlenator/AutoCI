@@ -24,6 +24,13 @@ export interface SqlResult {
   row_count: number;
   rows: Record<string, unknown>[];
   error: string | null;
+  // B-evidence: companion non-aggregated source rows that produced the
+  // aggregate above. Optional — only validated templates with a build_evidence
+  // hook return these. Renders as the "Source records" expandable section.
+  evidence_sql?: string | null;
+  evidence_rows?: Record<string, unknown>[];
+  evidence_row_count?: number;
+  evidence_error?: string | null;
 }
 
 export interface RagChunk {

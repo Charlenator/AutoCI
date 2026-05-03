@@ -41,6 +41,11 @@ class SQLTemplate:
     description: str                # 1-line, used in the Planner's prompt
     params: list[TemplateParam] = field(default_factory=list)
     build: Callable[[dict], str] = None
+    # Optional non-aggregated companion query: returns the underlying source rows
+    # that produced the aggregate result. Powers the "Source records" expandable
+    # section in the Citation Drawer (B-evidence). When None, no evidence query
+    # runs (e.g. for templates whose primary result is already record-level).
+    build_evidence: Callable[[dict], str] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -311,6 +316,99 @@ def _b_candidate_by_email(p: dict) -> str:
     """
 
 
+def _e_time_to_fill(p: dict) -> str:
+    role_filter = ""
+    if p.get("role_title"):
+        role_filter = f"AND r.title ILIKE {_quote_str('%' + p['role_title'] + '%')}"
+    return f"""
+        SELECT
+            COALESCE(c.name, c.external_id, c.candidate_id::text) AS candidate,
+            r.title AS role_title,
+            c.applied_date,
+            h.start_date,
+            ROUND(EXTRACT(EPOCH FROM (h.start_date::timestamp - c.applied_date::timestamp))::numeric / 86400, 1) AS days_to_fill
+        FROM hires h
+        JOIN candidates c ON c.candidate_id = h.candidate_id
+        JOIN roles r ON r.role_id = h.role_id
+        WHERE h.accepted = true
+          AND h.start_date IS NOT NULL
+          {role_filter}
+        ORDER BY r.title, h.start_date
+        LIMIT 100
+    """
+
+
+def _e_offer_acceptance_rate(p: dict) -> str:
+    role_filter = ""
+    if p.get("role_title"):
+        role_filter = f"AND r.title ILIKE {_quote_str('%' + p['role_title'] + '%')}"
+    return f"""
+        SELECT
+            COALESCE(c.name, c.external_id, c.candidate_id::text) AS candidate,
+            r.title AS role_title,
+            h.offer_date,
+            h.accepted,
+            h.start_date
+        FROM hires h
+        JOIN candidates c ON c.candidate_id = h.candidate_id
+        JOIN roles r ON r.role_id = h.role_id
+        WHERE 1 = 1
+          {role_filter}
+        ORDER BY r.title, h.offer_date
+        LIMIT 100
+    """
+
+
+def _e_conversion_rate(p: dict) -> str:
+    role_filter = ""
+    if p.get("role_title"):
+        role_filter = f"AND r.title ILIKE {_quote_str('%' + p['role_title'] + '%')}"
+    from_stage = p.get("from_stage", "Applied")
+    to_stage = p.get("to_stage", "Hired")
+    return f"""
+        SELECT
+            COALESCE(c.name, c.external_id, c.candidate_id::text) AS candidate,
+            r.title AS role_title,
+            BOOL_OR(pe.stage = {_quote_str(from_stage)}) AS reached_from,
+            BOOL_OR(pe.stage = {_quote_str(to_stage)}) AS reached_to,
+            MIN(pe.event_date) FILTER (WHERE pe.stage = {_quote_str(from_stage)}) AS from_date,
+            MIN(pe.event_date) FILTER (WHERE pe.stage = {_quote_str(to_stage)}) AS to_date
+        FROM candidates c
+        JOIN roles r ON r.role_id = c.role_id
+        LEFT JOIN pipeline_events pe ON pe.candidate_id = c.candidate_id
+        WHERE 1 = 1 {role_filter}
+        GROUP BY c.candidate_id, c.name, c.external_id, r.title
+        ORDER BY r.title, candidate
+        LIMIT 100
+    """
+
+
+def _e_kpis_for_role(p: dict) -> str:
+    # Reuses the time-to-fill evidence shape (the most useful per-record view
+    # for a single role), since hires are the source for both TTF and OAR.
+    return _e_time_to_fill(p)
+
+
+def _e_pipeline_volume_by_stage(p: dict) -> str:
+    role_filter = ""
+    if p.get("role_title"):
+        role_filter = f"AND r.title ILIKE {_quote_str('%' + p['role_title'] + '%')}"
+    return f"""
+        SELECT
+            COALESCE(c.name, c.external_id, c.candidate_id::text) AS candidate,
+            r.title AS role_title,
+            pe.stage,
+            pe.event_date,
+            pe.outcome
+        FROM pipeline_events pe
+        JOIN candidates c ON c.candidate_id = pe.candidate_id
+        JOIN roles r ON r.role_id = c.role_id
+        WHERE 1 = 1 {role_filter}
+        ORDER BY r.title, pe.stage, pe.event_date
+        LIMIT 100
+    """
+
+
 def _b_industry_benchmark_for_role(p: dict) -> str:
     role_safe = _quote_str("%" + p["role_title"] + "%")
     region_filter = ""
@@ -349,6 +447,7 @@ TEMPLATE_REGISTRY: dict[str, SQLTemplate] = {
                           description="Filter to roles whose title contains this substring (case-insensitive)."),
         ],
         build=_b_time_to_fill,
+        build_evidence=_e_time_to_fill,
     ),
     "offer_acceptance_rate": SQLTemplate(
         id="offer_acceptance_rate",
@@ -358,6 +457,7 @@ TEMPLATE_REGISTRY: dict[str, SQLTemplate] = {
             TemplateParam("role_title", "string", optional=True),
         ],
         build=_b_offer_acceptance_rate,
+        build_evidence=_e_offer_acceptance_rate,
     ),
     "conversion_rate": SQLTemplate(
         id="conversion_rate",
@@ -369,6 +469,7 @@ TEMPLATE_REGISTRY: dict[str, SQLTemplate] = {
             TemplateParam("to_stage", "stage_name", optional=True, default="Hired", enum=PIPELINE_STAGES),
         ],
         build=_b_conversion_rate,
+        build_evidence=_e_conversion_rate,
     ),
     "kpis_for_role": SQLTemplate(
         id="kpis_for_role",
@@ -379,6 +480,7 @@ TEMPLATE_REGISTRY: dict[str, SQLTemplate] = {
                           description="The role to look up; matched as a substring (e.g. 'Java Dev' matches 'Senior Java Developer')."),
         ],
         build=_b_kpis_for_role,
+        build_evidence=_e_kpis_for_role,
     ),
     "pipeline_volume_by_stage": SQLTemplate(
         id="pipeline_volume_by_stage",
@@ -388,6 +490,7 @@ TEMPLATE_REGISTRY: dict[str, SQLTemplate] = {
             TemplateParam("role_title", "string", optional=True),
         ],
         build=_b_pipeline_volume_by_stage,
+        build_evidence=_e_pipeline_volume_by_stage,
     ),
     "candidate_search_by_skill": SQLTemplate(
         id="candidate_search_by_skill",
@@ -442,3 +545,14 @@ def build_template_sql(template_id: str, raw_params: dict | None) -> str:
     tpl = TEMPLATE_REGISTRY[template_id]
     validated = validate_params(tpl, raw_params)
     return tpl.build(validated)
+
+
+def build_template_evidence_sql(template_id: str, raw_params: dict | None) -> str | None:
+    """Build the evidence (non-aggregated source rows) SQL for a template, or None if it has no evidence path."""
+    if template_id not in TEMPLATE_REGISTRY:
+        raise TemplateParamError(f"Unknown template '{template_id}'")
+    tpl = TEMPLATE_REGISTRY[template_id]
+    if tpl.build_evidence is None:
+        return None
+    validated = validate_params(tpl, raw_params)
+    return tpl.build_evidence(validated)

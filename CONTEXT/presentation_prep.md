@@ -88,6 +88,18 @@ When Sprint D5 (submission deliverables) lands, the README and screen-record nar
 
 ---
 
+## Q: "How does the system handle source traceability for an aggregated number — like 'average time to fill is 83.3 days'?"
+
+**Short version**:
+> Every aggregate-result template carries a sibling `build_evidence` query that returns the underlying source rows that produced the aggregate. The Citation drawer renders the aggregate up top, then expands to a "Source records (N)" table — for the 83.3-day TTF answer, reviewers see the three actual hires (candidate, role, applied date, start date, days-to-fill) that the AVG was computed over. The evidence query goes through the same SQL allowlist as everything else, and a failure in the evidence path is isolated so the main answer still renders.
+
+**Why this matters for the brief**:
+- "Source traceability" is a literal Part 1 requirement. Showing the SQL is good; showing the SQL *and* the actual records that produced the number is stronger — it removes the "trust the SQL" leap entirely.
+- It's the same architectural shape used everywhere else (clickable citation chips → drawer with full provenance), just one layer deeper for SQL.
+- Templates whose primary result is already record-level (candidate-by-skill, candidate-by-email, industry-benchmark-for-role) deliberately skip the evidence path — adding a duplicate evidence query for a record-level result would be cargo-culted.
+
+---
+
 ## Q: "Why HITL between phases instead of letting the agents run autonomously?"
 
 **Short version**:

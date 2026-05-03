@@ -56,7 +56,8 @@ function RagChunkBody({ chunk }: { chunk: NonNullable<CitationType["ragChunk"]> 
 
 function SqlResultBody({ sqlResult }: { sqlResult: NonNullable<CitationType["sqlResult"]> }) {
   const rows = sqlResult.rows ?? [];
-  const columnKeys = rows.length > 0 ? Object.keys(rows[0]) : [];
+  const evidenceRows = sqlResult.evidence_rows ?? [];
+  const evidenceCount = sqlResult.evidence_row_count ?? evidenceRows.length;
   return (
     <div className="space-y-3 text-sm">
       {sqlResult.template_id && (
@@ -71,45 +72,80 @@ function SqlResultBody({ sqlResult }: { sqlResult: NonNullable<CitationType["sql
           {sqlResult.sql.trim()}
         </pre>
       </details>
-      {rows.length > 0 && (
-        <div>
-          <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">
-            Result rows
-          </div>
-          <div className="overflow-x-auto">
-            <table className="text-xs w-full border-collapse">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-200">
-                  {columnKeys.map((k) => (
-                    <th
-                      key={k}
-                      className="text-left font-semibold text-gray-600 px-2 py-1.5"
-                    >
-                      {k}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.slice(0, 20).map((row, i) => (
-                  <tr key={i} className="border-b border-gray-100">
-                    {columnKeys.map((k) => (
-                      <td key={k} className="px-2 py-1.5 text-gray-800 align-top">
-                        {formatCell(row[k])}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {rows.length > 20 && (
-              <p className="text-xs text-gray-500 mt-1">
-                Showing first 20 of {rows.length} rows.
+      <RowTable label="Result rows" rows={rows} />
+      {(evidenceRows.length > 0 || sqlResult.evidence_sql || sqlResult.evidence_error) && (
+        <details className="border-t border-gray-100 pt-3">
+          <summary className="cursor-pointer text-xs uppercase tracking-wide text-gray-500 hover:text-gray-700">
+            Source records ({evidenceCount})
+          </summary>
+          <div className="mt-2 space-y-2">
+            {sqlResult.evidence_error ? (
+              <p className="text-xs text-amber-700">
+                Couldn't load source records: {sqlResult.evidence_error}
               </p>
+            ) : (
+              <>
+                <p className="text-xs text-gray-500">
+                  The individual records that produced the aggregate above.
+                </p>
+                <RowTable label={null} rows={evidenceRows} />
+                {sqlResult.evidence_sql && (
+                  <details>
+                    <summary className="cursor-pointer text-xs uppercase tracking-wide text-gray-500 hover:text-gray-700">
+                      Source SQL
+                    </summary>
+                    <pre className="mt-1 p-2 bg-gray-50 rounded border border-gray-200 overflow-x-auto text-xs text-gray-800 whitespace-pre-wrap">
+                      {sqlResult.evidence_sql.trim()}
+                    </pre>
+                  </details>
+                )}
+              </>
             )}
           </div>
-        </div>
+        </details>
       )}
+    </div>
+  );
+}
+
+function RowTable({ label, rows }: { label: string | null; rows: Record<string, unknown>[] }) {
+  if (!rows || rows.length === 0) return null;
+  const columnKeys = Object.keys(rows[0]);
+  const cap = 20;
+  return (
+    <div>
+      {label && (
+        <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">{label}</div>
+      )}
+      <div className="overflow-x-auto">
+        <table className="text-xs w-full border-collapse">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-200">
+              {columnKeys.map((k) => (
+                <th key={k} className="text-left font-semibold text-gray-600 px-2 py-1.5">
+                  {k}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.slice(0, cap).map((row, i) => (
+              <tr key={i} className="border-b border-gray-100">
+                {columnKeys.map((k) => (
+                  <td key={k} className="px-2 py-1.5 text-gray-800 align-top">
+                    {formatCell(row[k])}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {rows.length > cap && (
+          <p className="text-xs text-gray-500 mt-1">
+            Showing first {cap} of {rows.length} rows.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

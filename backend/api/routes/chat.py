@@ -42,6 +42,7 @@ class ChatResponse(BaseModel):
 # Cap how many SQL rows / RAG chunks we send back so a single API call can't
 # accidentally ship megabytes of data.
 _SQL_ROW_PREVIEW_LIMIT = 50
+_EVIDENCE_ROW_PREVIEW_LIMIT = 100
 _RAG_CHUNK_LIMIT = 5
 
 
@@ -63,12 +64,17 @@ async def chat_query(body: ChatRequest, request: Request):
             executor = SQLExecutor(supabase)
             result = executor.execute(plan)
             preview_rows = result.rows[:_SQL_ROW_PREVIEW_LIMIT]
+            evidence_preview = result.evidence_rows[:_EVIDENCE_ROW_PREVIEW_LIMIT]
             sql_payload = {
                 "template_id": result.template_id,
                 "sql": result.sql,
                 "row_count": result.row_count,
                 "rows": preview_rows,
                 "error": result.error,
+                "evidence_sql": result.evidence_sql,
+                "evidence_rows": evidence_preview,
+                "evidence_row_count": result.evidence_row_count,
+                "evidence_error": result.evidence_error,
             }
 
         # ---- RAG path ----

@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from api.agents.specialists.s1_query_planner import QueryPlan
 from api.agents.specialists.sql_templates import (
     TemplateParamError,
+    build_template_evidence_sql,
     build_template_sql,
 )
 
@@ -35,6 +36,14 @@ class ExecutorResult:
     rows: list[dict] = field(default_factory=list)
     error: str | None = None        # human-readable error, if any
     row_count: int = 0
+    # B-evidence: companion non-aggregated query showing the source rows that
+    # produced the aggregate result. None when the template has no evidence
+    # builder (or for freeform SELECTs). evidence_error captures evidence-only
+    # failures so the main result still renders if the evidence query trips.
+    evidence_sql: str | None = None
+    evidence_rows: list[dict] = field(default_factory=list)
+    evidence_row_count: int = 0
+    evidence_error: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -95,7 +104,10 @@ class SQLExecutor:
                     rows=[],
                     error=f"template param error: {exc}",
                 )
-            return self._run(sql, plan.sql_template_id)
+            result = self._run(sql, plan.sql_template_id)
+            if result.error is None:
+                self._attach_evidence(result, plan)
+            return result
 
         # Path B — freeform SELECT (already vetted by the planner; we re-validate here)
         if plan.sql_freeform:
@@ -146,3 +158,49 @@ class SQLExecutor:
             error=None,
             row_count=len(rows),
         )
+
+    def _attach_evidence(self, result: ExecutorResult, plan: QueryPlan) -> None:
+        """Run the optional evidence query for the template and attach its rows in-place.
+
+        Evidence failures are isolated — the main aggregate result stands even if
+        the evidence query trips. The validation pass treats the generated SQL
+        as freeform so it goes through the same allowlist as user-derived SQL,
+        belt-and-braces.
+        """
+        if not plan.sql_template_id:
+            return
+        try:
+            evidence_sql = build_template_evidence_sql(
+                plan.sql_template_id, plan.sql_template_params
+            )
+        except TemplateParamError as exc:
+            result.evidence_error = f"evidence param error: {exc}"
+            return
+        if not evidence_sql:
+            return  # template has no evidence path; not an error
+
+        try:
+            _validate_freeform_sql(evidence_sql)
+        except FreeformSQLValidationError as exc:
+            result.evidence_sql = evidence_sql
+            result.evidence_error = f"evidence SQL rejected: {exc}"
+            return
+
+        try:
+            resp = self.supabase.rpc("run_select_query", {"sql_text": evidence_sql}).execute()
+        except Exception as exc:  # noqa: BLE001 -- DB driver may raise broadly
+            result.evidence_sql = evidence_sql
+            result.evidence_error = f"evidence DB error: {exc}"
+            return
+
+        rows = resp.data
+        if isinstance(rows, dict) and "rows" in rows:
+            rows = rows["rows"]
+        if rows is None:
+            rows = []
+        if not isinstance(rows, list):
+            rows = [rows]
+
+        result.evidence_sql = evidence_sql
+        result.evidence_rows = rows
+        result.evidence_row_count = len(rows)

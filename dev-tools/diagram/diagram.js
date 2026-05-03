@@ -17,7 +17,7 @@ import ReactFlow, {
 // Update each time work shifts. Keep both sides in sync — Charle should always
 // know what (if anything) is blocking him.
 const NOW = {
-  claude: "🛏️ End-of-session handoff. Today: Sprints A1/A2/B1/B2(+polish)/B3/B4 + embedding switch + migration 007 corpus dedup all shipped + pushed. SESSION_RESUME.md rewritten with the full handoff. Next-session priority order: (1) B-evidence — show *underlying source rows* in the Citation Drawer (Charle's last ask before handoff). (2) B-aug — live search augmentation in chat path. (3) B5 — fill the Modal worker. (4) B6/B7/B8.",
+  claude: "B-evidence shipped: SQL templates with aggregate output now expose an optional build_evidence() that returns the underlying source rows (e.g. the 3 hires behind a TTF average). ExecutorResult carries evidence_sql + evidence_rows; Citation Drawer renders 'Source records (N)' as an expandable section with its own Source SQL toggle. 5 templates wired (time_to_fill, offer_acceptance_rate, conversion_rate, kpis_for_role, pipeline_volume_by_stage); record-level templates (candidate_search_by_skill etc.) intentionally have no evidence. Next: B-aug live-search augmentation, then B5 Modal worker fill.",
   charle: "Two optional parallel tasks (non-blocking): (1) Set RESEND_WEBHOOK_SECRET on Supabase Edge Function secrets (Step 5 below). (2) Generate more CV variety if you want edge cases to test. Otherwise just chill until next session — fresh context, clean state.",
 };
 
@@ -154,13 +154,15 @@ const SPRINTS = [
     id: "B",
     label: "Brief-required closures",
     status: "in_progress",
-    progress: 0.55,
+    progress: 0.6,
     substeps: [
       { id: "B1", label: "Query Planner + sql_templates + SQL exec + 4-layer safety", status: "done" },
       { id: "B2", label: "Citation chip system + CitationDrawer + QueryTransformationCard + ChatPanel", status: "done" },
       { id: "B-emb", label: "(slot-in) Embedding switch: OpenAI ada-002 (1536-d) → bge-small-en-v1.5 (384-d). Free, local. Migration 006 applied; 213 chunks re-embedded; RAG smoke test passes.", status: "done" },
       { id: "B3", label: "Knowledge Sources Panel + /sources route", status: "done" },
       { id: "B4", label: "Edge Function v2 + Modal worker scaffold + /inbound/simulate + /inbound/trigger + /inbound/drain", status: "done" },
+      { id: "B-evidence", label: "Source-record evidence in Citation Drawer — templates emit optional build_evidence(); ExecutorResult carries evidence_rows/sql; UI renders aggregate + expandable Source Records.", status: "done" },
+      { id: "B-aug", label: "Live-search augmentation in chat path (planner needs_live_search → S4 → upsert into corpus_chunks → re-retrieve)", status: "pending" },
       { id: "B5", label: "Modal worker filling — classifier + extractor + confidentiality + vectorizer", status: "pending" },
       { id: "B6", label: "Resend send wrapper", status: "pending" },
       { id: "B7", label: "cal.com slot wrapper", status: "pending" },
@@ -198,6 +200,7 @@ const SPRINTS = [
 // ---------- Changelog (most recent first) ----------
 // kind: 'shipped' | 'progress' | 'cut' | 'decision' | 'infra'
 const CHANGELOG = [
+  { date: "2026-05-03", kind: "shipped", text: "B-evidence shipped — SQLTemplate gains optional build_evidence(); ExecutorResult carries evidence_sql + evidence_rows + evidence_error; chat.py forwards them; Citation drawer renders an expandable 'Source records (N)' section under the aggregate, with its own Source SQL toggle. Wired for time_to_fill, offer_acceptance_rate, conversion_rate, kpis_for_role, pipeline_volume_by_stage. Already-record-level templates (candidate_search_by_skill, candidate_by_email, industry_benchmark_for_role) intentionally have no evidence path. Unit-test coverage added in test_all.py. Closes Charle's last ask before the prior handoff." },
   { date: "2026-05-03", kind: "decision", text: "B-evidence added to plan (next-session priority): templates get an optional build_evidence() that returns the *underlying source rows* (the 3 hires that produced the 83.3-day average), not just the aggregate. Citation Drawer renders both. Stronger 'source traceability' demo." },
   { date: "2026-05-03", kind: "decision", text: "B-aug added to plan: live-search augmentation in chat path. Currently S4 is Kaizen-only; chat questions about current market data get stale answers. Next session item." },
   { date: "2026-05-03", kind: "shipped", text: "Migration 007: dedup corpus_chunks (213 → 79 rows; 134 dupes from re-vectorization on every Kaizen run) + UNIQUE content_hash index to block future dupes. CV chunks remain per-candidate distinguishable via metadata->>'candidate_id' in the dedup key." },

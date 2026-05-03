@@ -4,6 +4,8 @@
 >
 > Big productive session. Sprints A1, A2, B1, B2 (+ polish), B3, B4 all shipped + pushed to main. Migrations 004 / 005 / 006 / 007 applied. Embedding stack switched off OpenAI (free local bge-small-en-v1.5). Edge Function v2 + Modal-worker-scaffold + /inbound/* routes + KnowledgeSourcesPanel + Citation Drawer + Query Transformation Card all live.
 >
+> **Update — same evening, second pass**: B-evidence is now also shipped. Five aggregate-result SQL templates (TTF, OAR, conversion, KPI summary, pipeline volume) gained an optional `build_evidence` companion that returns the underlying source rows. `ExecutorResult` carries `evidence_sql` / `evidence_rows` / `evidence_error`; chat.py forwards them; the Citation drawer renders an expandable "Source records (N)" section under the aggregate. Evidence-only failures are isolated from the main result. `test_all.py` exercises the new path. Pick up B-aug next.
+>
 > **Project files for the next session to read first**:
 > - `CONTEXT/plan-of-record.md` — phases B5 → D5 still ahead. Ignore phases marked ✅ in the status table.
 > - `CONTEXT/dev-progress-diagram.md` — node-level status. Open `dev-tools/diagram/index.html` with VS Code Live Server for the rich UI: NOW panel, Charle's checklist, sprint progress, changelog.
@@ -22,7 +24,8 @@
 >
 > ## What's next (priority-ordered)
 >
-> 1. **B5 (in flight) — fill the Modal worker.** Today shipped the *scaffold* (`backend/api/workers/inbound_processor.py`); the body still does a stub classifier on MIME type. Next session needs:
+> 1. **B-aug — live-search augmentation in chat path.** Currently S4 is Kaizen-only; chat questions like "current market salaries" get stale data. Add a `needs_live_search` flag to the Query Planner envelope; when set, chat.py calls S4 → chunks → embeds → upserts → re-retrieves. Migration 007's UNIQUE constraint makes the upsert path safe.
+> 2. **B5 — fill the Modal worker.** Shipped scaffold (`backend/api/workers/inbound_processor.py`); body still does a stub classifier on MIME type. Next session needs:
 >    - S5 CV classifier agent (DeepSeek "is this a CV?" call)
 >    - S6 CV extractor (`python-docx` text extraction → DeepSeek field extraction → normalized JSON)
 >    - S7 Confidentiality classifier
@@ -30,7 +33,6 @@
 >    - Email vectorizer for non-CV inbound mail
 >    - Wire all of these into `process_pending_email`
 >    - Test via `/inbound/simulate` with one of Charle's 20 generated `.docx` CVs from `dev-tools/cv_generator/output/`
-> 2. **B-aug (NEW, just added)** — live-search augmentation in the chat path. Currently S4 is Kaizen-only; chat questions like "current market salaries" get stale data. Add a `needs_live_search` flag to the Query Planner envelope; when set, chat.py calls S4 → chunks → embeds → upserts → re-retrieves. Migration 007's UNIQUE constraint makes the upsert path safe.
 > 3. **B6 — Resend send wrapper.** Thin Python client.
 > 4. **B7 — cal.com slot lookup wrapper.** Free-tier API, spike-verified 2026-05-03.
 > 5. **B8 — Candidate Search interface + Schedule Meeting flow.** Largest remaining UI piece.

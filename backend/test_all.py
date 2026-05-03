@@ -77,6 +77,7 @@ def level1_unit():
     from api.agents.specialists.sql_templates import (
         TEMPLATE_REGISTRY,
         build_template_sql,
+        build_template_evidence_sql,
         TemplateParamError,
     )
     test("S1: planner imports cleanly", lambda: QueryPlannerAgent is not None)
@@ -110,6 +111,25 @@ def level1_unit():
     except TemplateParamError:
         kpis_required_raised = True
     test("S1: missing required param raises TemplateParamError", lambda: kpis_required_raised)
+
+    # B-evidence: every template that exposes build_evidence must produce a
+    # SELECT/WITH-prefixed SQL string for representative params.
+    evidence_params = {
+        "time_to_fill": {"role_title": "Java"},
+        "offer_acceptance_rate": {"role_title": "Java"},
+        "conversion_rate": {"role_title": "Java"},
+        "kpis_for_role": {"role_title": "Java"},
+        "pipeline_volume_by_stage": {},
+    }
+    for tid, params in evidence_params.items():
+        if tid not in TEMPLATE_REGISTRY:
+            continue
+        tid_, params_ = tid, params
+        test(f"B-evidence: '{tid_}' builds source-record SELECT",
+             lambda tid=tid_, p=params_: (build_template_evidence_sql(tid, p) or "").strip().upper().startswith(("SELECT", "WITH")))
+    # Templates whose result is already record-level should return None.
+    test("B-evidence: candidate_search_by_skill has no evidence (already record-level)",
+         lambda: build_template_evidence_sql("candidate_search_by_skill", {"skill_keyword": "Java"}) is None)
 
     # SQL Executor sanity (regex allowlist on freeform)
     from api.agents.specialists.s3_sql_executor import (

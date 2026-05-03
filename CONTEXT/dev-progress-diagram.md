@@ -218,8 +218,9 @@ graph TB
 | Routes | /simulate-inbound | 📋 | S | 6 | Dev affordance |
 | Specialists | S1 QueryPlanner | ✅ | — | B1 | LLM, schema-aware, JSON envelope; legacy TranslationAgent retired |
 | Specialists | S2 RAGAgent | ✅ | — | — | |
-| Specialists | S3 SQLExecutor | ✅ | — | B1 | Thin executor; legacy SQLAgent retired |
-| Specialists | sql_templates dict | ✅ | — | B1 | 8 validated templates; covers TTF/conversion/OAR/KPIs/pipeline/candidate-search/email-lookup/benchmark |
+| Specialists | S3 SQLExecutor | ✅ | — | B1 + B-evidence | Thin executor; legacy SQLAgent retired. Now also runs the optional template evidence query and attaches `evidence_rows` / `evidence_sql` / `evidence_error` to ExecutorResult. |
+| Specialists | sql_templates dict | ✅ | — | B1 + B-evidence | 8 validated templates; covers TTF/conversion/OAR/KPIs/pipeline/candidate-search/email-lookup/benchmark. 5 aggregate-result templates also expose `build_evidence` returning the underlying source rows. |
+| Frontend | Citation drawer source-records section | ✅ | — | B-evidence | Aggregate stays up top; expandable "Source records (N)" table below + Source SQL toggle. |
 | Specialists | S4 ResearchAgent | ✅ | — | — | Tavily / News / Adzuna |
 | Detection | D1 InternalBenchmarking | ✅ | — | 2 | |
 | Detection | D2 ExternalBenchmarking | ✅ | — | 4.5 | Live salary signal live |
