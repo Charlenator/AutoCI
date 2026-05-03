@@ -13,7 +13,20 @@ No `npm install`. No build step. React + React Flow load via CDN (`esm.sh`) on f
 
 ## How to update node statuses
 
-Edit `diagram.js`. Each node lives in `NODES_RAW` as a 6-tuple:
+Edit `diagram.js`. Two things to update when something changes:
+
+1. **`NODES_RAW`** — the node's status (so the visual graph reflects current state).
+2. **`CHANGELOG`** — a one-line entry at the top describing what changed.
+
+The changelog renders as a sidebar on the right of the diagram so "what changed recently" is visible at a glance. Keep entries short. Five `kind` values are styled distinctly:
+
+- `shipped` — green dot. A node moved to ✅ done.
+- `progress` — amber dot. A node is in flight.
+- `cut` — red dot. Something was removed from scope (likely moved to ROADMAP).
+- `decision` — purple dot. An architectural / scope decision worth remembering.
+- `infra` — cyan dot. Infrastructure event (deploy, key rotation, MCP tool added).
+
+Each node lives in `NODES_RAW` as a 6-tuple:
 
 ```js
 [groupId, id, label, status, effort, phase]

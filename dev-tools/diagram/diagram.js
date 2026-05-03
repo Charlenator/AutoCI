@@ -1,6 +1,7 @@
 // AutoCI Dev Progress — React Flow standalone diagram.
 // View with VS Code Live Server (right-click index.html → Open with Live Server).
 // Update node statuses by editing NODES_RAW below or CONTEXT/dev-progress-diagram.md.
+// Update CHANGELOG below whenever a meaningful node moves status (most-recent first).
 
 import React from 'https://esm.sh/react@18';
 import { createRoot } from 'https://esm.sh/react-dom@18/client';
@@ -11,6 +12,20 @@ import ReactFlow, {
   Handle,
   Position,
 } from 'https://esm.sh/reactflow@11.10.4?deps=react@18,react-dom@18';
+
+// ---------- Changelog (most recent first) ----------
+// kind: 'shipped' | 'progress' | 'cut' | 'decision' | 'infra'
+const CHANGELOG = [
+  { date: "2026-05-03", kind: "shipped", text: "Sprint A2 — 3-tab shell skeleton: TopNav, RightDrawer, /, /candidates, /cis routes." },
+  { date: "2026-05-03", kind: "infra", text: "CV generator tooling shipped: dev-tools/cv_generator/make_cvs.py + LLM prompt. First 20 .docx CVs generated locally." },
+  { date: "2026-05-03", kind: "shipped", text: "Sprint A1 — Migration 004 applied via Supabase MCP: inbound_emails table, candidates extended, corpus_chunks.confidential, match_chunks RPC updated, cv-attachments bucket." },
+  { date: "2026-05-03", kind: "decision", text: "Unified corpus_chunks design: CVs/JDs/email summaries all live in one table, distinguished by corpus_name + metadata." },
+  { date: "2026-05-03", kind: "infra", text: "Edge Function inbound-email stub deployed (returns 200 so Resend webhook validation passes). Real handler lands in Sprint B4." },
+  { date: "2026-05-03", kind: "infra", text: "Resend webhook configured (signing secret + API key in backend/.env). cal.com slot-lookup API verified." },
+  { date: "2026-05-03", kind: "decision", text: "Inbound architecture: Edge Function = dumb pipe; Modal Python worker = heavy processing. .docx-only POC." },
+  { date: "2026-05-03", kind: "cut", text: "Cuts moved to ROADMAP: RACI, Pareto, cross-Kaizen view, system_logs middleware, JD-paste fan-out." },
+  { date: "2026-05-03", kind: "decision", text: "Plan pivot 2026-05-03: 3-interface shell + Resend + cal.com + CIS rebrand. Old plan archived." },
+];
 
 // ---------- Layout config ----------
 const NODE_W = 230;
@@ -341,3 +356,28 @@ const App = () => {
 const container = document.getElementById('root');
 const root = createRoot(container);
 root.render(React.createElement(App));
+
+// ---------- Render changelog sidebar (vanilla DOM, no React needed) ----------
+function renderChangelog() {
+  const list = document.getElementById('changelog-list');
+  if (!list) return;
+  list.innerHTML = CHANGELOG.map((entry) => {
+    const tagLabel = {
+      shipped: 'shipped',
+      progress: 'in progress',
+      cut: 'cut',
+      decision: 'decision',
+      infra: 'infra',
+    }[entry.kind] || entry.kind;
+    return `
+      <li class="kind-${entry.kind}">
+        <div class="changelog-meta">
+          <span>${entry.date}</span>
+          <span class="changelog-tag tag-${entry.kind}">${tagLabel}</span>
+        </div>
+        <div class="changelog-text">${entry.text}</div>
+      </li>
+    `;
+  }).join('');
+}
+renderChangelog();

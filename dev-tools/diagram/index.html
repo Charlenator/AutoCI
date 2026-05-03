@@ -20,7 +20,16 @@
       <span class="legend-item legend-todoBig">📋 TODO (L/XL)</span>
     </div>
   </header>
-  <div id="root"></div>
+  <div id="layout">
+    <div id="root"></div>
+    <aside id="changelog">
+      <div class="changelog-header">
+        <h2>📋 Recent changes</h2>
+        <span class="changelog-hint">most recent first</span>
+      </div>
+      <ol id="changelog-list"></ol>
+    </aside>
+  </div>
   <script type="module" src="./diagram.js"></script>
 </body>
 </html>

@@ -177,6 +177,37 @@
 
 ---
 
+## Demo data realism
+
+### Seed a deliberate, traceable defect into the pipeline data ⭐ (do before final demo)
+**Effort**: M
+**What**: Today's seed data is statistically reasonable but not *causally* meaningful — KPI shortfalls exist as noise, not as a real story the Kaizen can uncover. Inject a deliberate defect so the AI's root-cause analysis lands on something that's actually there.
+
+**Concrete proposal — "follow-up lag" defect**:
+- For one specific role (suggest: UX Designer, where OAR is already weak in the seed), introduce a clear causal chain:
+  - 60-70% of candidates who reach the "Interview" stage have their next pipeline event (`Offer` or `Decline`) >10 days later — vs <4 days for the other roles.
+  - Of those delayed candidates, 80% decline the offer when it finally arrives (vs ~15% baseline decline rate).
+  - Decline reasons (in `offer_outcomes.decline_reason`) for that subset cluster on "accepted competing offer" / "lost interest" / "took too long".
+- The Five Whys + Ishikawa chain on UX OAR should now land on: *"recruiter doesn't send follow-up promptly after interview"* → *"no automated reminder"* → *"manual handoff between interviewer and recruiter"*.
+- The improve phase can recommend: an SLA on post-interview follow-up, an automated reminder to the recruiter, a Kanban WIP limit on "Awaiting Offer."
+
+**Why valuable**: turns the demo from "look at this elaborate methodology" into "watch the system find the actual problem in the data." Big credibility moment for reviewers.
+
+**Why deferred**: not blocking the build. Best done after the CIS rebrand lands (Sprint C) so we can verify the K_TOOL_SELECTOR genuinely picks the right tools to surface this. Implementing earlier just to re-implement after the orchestrator rewrite would be churn.
+
+**How to implement when we get there**:
+1. Extend `seed_generator.py` with a `defect_profile` parameter per role. UX Designer gets `follow_up_lag` profile; others stay clean.
+2. Add the lag in the gap between `Interview` and `Offer`/`Decline` events.
+3. Bias `decline_reason` strings on delayed candidates toward the "took too long" cluster.
+4. Re-run the generator, apply via a new migration `00X_seed_v3_with_defect.sql`.
+5. Verify by firing a Kaizen on UX OAR and confirming K4/K5 surface the lag in their reasoning.
+
+**Possible additional defects** (if we want to stress-test the K_TOOL_SELECTOR's picks):
+- *Source-channel quality cliff*: one source channel (e.g. "Agency") has 3x worse OAR than others — should surface in K5 Ishikawa under "Materials" or via a Pareto chart.
+- *Interviewer bottleneck*: one specific interviewer has a 2-week scheduling lag, dragging up TTF — surfaces if interviewer-level data is exposed.
+
+---
+
 ## Process / Methodology improvements
 
 ### Automated reference checks
