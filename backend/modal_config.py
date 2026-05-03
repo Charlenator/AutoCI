@@ -40,6 +40,12 @@ EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
 
 image = (
     Image.debian_slim(python_version="3.11")
+    # CPU-only torch FIRST. Without this, pip's default Linux resolution picks
+    # the CUDA wheels and pulls the entire NVIDIA toolkit (~5 GB of cuda-bindings,
+    # cudnn, cublas, etc.) which we don't use — embeddings run on CPU. Pinning
+    # torch to the CPU index url here means the later pip_install_from_requirements
+    # step sees torch already satisfied and skips it.
+    .pip_install("torch>=2.0", index_url="https://download.pytorch.org/whl/cpu")
     .pip_install_from_requirements("requirements.txt")
     .run_commands(
         f"python -c 'from sentence_transformers import SentenceTransformer; "
@@ -63,10 +69,10 @@ SECRETS = [Secret.from_name("autoci-secrets")]
 
 @app.function(
     secrets=SECRETS,
-    allow_concurrent_inputs=10,
-    container_idle_timeout=300,
+    scaledown_window=300,
     timeout=600,
 )
+@modal.concurrent(max_inputs=10)
 @asgi_app()
 def fastapi_app():
     """Serve backend/main.py:app as a public Modal asgi_app."""
