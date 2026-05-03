@@ -11,12 +11,14 @@ A standalone, no-build-step React Flow diagram for tracking AutoCI development s
 
 No `npm install`. No build step. React + React Flow load via CDN (`esm.sh`) on first run — needs an internet connection for that.
 
-## How to update node statuses
+## How to update progress
 
-Edit `diagram.js`. Two things to update when something changes:
+Edit `diagram.js`. Four things stay in sync:
 
-1. **`NODES_RAW`** — the node's status (so the visual graph reflects current state).
-2. **`CHANGELOG`** — a one-line entry at the top describing what changed.
+1. **`NOW`** — what Claude and Charle are working on right now. Update at every sprint-step transition or whenever the parallel work for Charle changes.
+2. **`SPRINTS`** — the sprint tracker. Each sprint has `status` (`done` / `in_progress` / `pending`), `progress` (0..1 bar fill), and a `substeps` list with their own statuses. Bump these as steps complete.
+3. **`NODES_RAW`** — the node's status (so the visual graph reflects current state).
+4. **`CHANGELOG`** — a one-line entry at the top describing what changed.
 
 The changelog renders as a sidebar on the right of the diagram so "what changed recently" is visible at a glance. Keep entries short. Five `kind` values are styled distinctly:
 

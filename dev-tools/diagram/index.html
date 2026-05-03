@@ -22,12 +22,35 @@
   </header>
   <div id="layout">
     <div id="root"></div>
-    <aside id="changelog">
-      <div class="changelog-header">
-        <h2>📋 Recent changes</h2>
-        <span class="changelog-hint">most recent first</span>
-      </div>
-      <ol id="changelog-list"></ol>
+    <aside id="sidebar">
+      <section id="now-panel" class="panel">
+        <div class="panel-header">
+          <h2>👋 Right now</h2>
+        </div>
+        <div class="now-row">
+          <div class="now-label">Claude</div>
+          <div id="now-claude" class="now-text">—</div>
+        </div>
+        <div class="now-row">
+          <div class="now-label">Charle</div>
+          <div id="now-charle" class="now-text">—</div>
+        </div>
+      </section>
+
+      <section id="sprint-panel" class="panel">
+        <div class="panel-header">
+          <h2>🚀 Sprint progress</h2>
+        </div>
+        <ol id="sprint-list"></ol>
+      </section>
+
+      <section id="changelog-panel" class="panel">
+        <div class="panel-header">
+          <h2>📋 Recent changes</h2>
+          <span class="panel-hint">most recent first</span>
+        </div>
+        <ol id="changelog-list"></ol>
+      </section>
     </aside>
   </div>
   <script type="module" src="./diagram.js"></script>

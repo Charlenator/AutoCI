@@ -13,9 +13,79 @@ import ReactFlow, {
   Position,
 } from 'https://esm.sh/reactflow@11.10.4?deps=react@18,react-dom@18';
 
+// ---------- "Right now" panel ----------
+// Update each time work shifts. Keep both sides in sync — Charle should always
+// know what (if anything) is blocking him.
+const NOW = {
+  claude: "Sprint B1 — Query Planner + sql_templates + SQL executor + 4-layer SQL safety. Migration 005 (run_select_query RPC) applied.",
+  charle: "Nothing blocking. Optional: keep generating CV batches if you want richer test data — the pipeline can ingest them once Sprint B5 lands.",
+};
+
+// ---------- Sprint progress ----------
+// status: 'done' | 'in_progress' | 'pending'
+// progress: 0..1 (how far through the sprint we are)
+const SPRINTS = [
+  {
+    id: "A",
+    label: "Foundation",
+    status: "done",
+    progress: 1,
+    substeps: [
+      { id: "A1", label: "Migration 004 applied", status: "done" },
+      { id: "A2", label: "3-tab shell skeleton + nav + drawer", status: "done" },
+    ],
+  },
+  {
+    id: "B",
+    label: "Brief-required closures",
+    status: "in_progress",
+    progress: 0.05,
+    substeps: [
+      { id: "B1", label: "Query Planner + sql_templates + SQL exec + 4-layer safety", status: "in_progress" },
+      { id: "B2", label: "Citation chip system + CitationDrawer", status: "pending" },
+      { id: "B3", label: "Knowledge Sources Panel + /sources route", status: "pending" },
+      { id: "B4", label: "Edge Function (dumb pipe) + Modal worker scaffold", status: "pending" },
+      { id: "B5", label: "Modal worker filling — classifier + extractor + confidentiality + vectorizer", status: "pending" },
+      { id: "B6", label: "Resend send wrapper", status: "pending" },
+      { id: "B7", label: "cal.com slot wrapper", status: "pending" },
+      { id: "B8", label: "CandidateSearch interface + Schedule Meeting flow", status: "pending" },
+    ],
+  },
+  {
+    id: "C",
+    label: "Core nice-to-haves",
+    status: "pending",
+    progress: 0,
+    substeps: [
+      { id: "C1", label: "CIS rebrand: K_SCOPING + K_TOOL_SELECTOR + dynamic O2", status: "pending" },
+      { id: "C2", label: "K6 update + retire K7 + interventions table", status: "pending" },
+      { id: "C3", label: "FMEA tool", status: "pending" },
+      { id: "C4", label: "Findings + Impact/Effort tables", status: "pending" },
+      { id: "C5", label: "React Flow drawer in frontend (cumulative lighting)", status: "pending" },
+    ],
+  },
+  {
+    id: "D",
+    label: "Deploy + submit",
+    status: "pending",
+    progress: 0,
+    substeps: [
+      { id: "D1", label: "Vercel frontend deploy (auto on push)", status: "in_progress" },
+      { id: "D2", label: "Modal backend deploy", status: "pending" },
+      { id: "D3", label: "Edge Function deploy + Resend webhook URL", status: "done" },
+      { id: "D4", label: "Prod smoke test", status: "pending" },
+      { id: "D5", label: "Submission deliverables", status: "pending" },
+    ],
+  },
+];
+
 // ---------- Changelog (most recent first) ----------
 // kind: 'shipped' | 'progress' | 'cut' | 'decision' | 'infra'
 const CHANGELOG = [
+  { date: "2026-05-03", kind: "decision", text: "No emojis in user-facing UI. Existing nav + page placeholders rewritten to text-only." },
+  { date: "2026-05-03", kind: "shipped", text: "Dev diagram: added Right-now panel + Sprint progress tracker (A/B/C/D with sub-step status)." },
+  { date: "2026-05-03", kind: "infra", text: "Migration 005 applied: run_select_query RPC (Postgres-level SELECT-only enforcement, layer 4 of SQL safety)." },
+  { date: "2026-05-03", kind: "progress", text: "Sprint B1 in flight: Query Planner + sql_templates + S3 SQL Executor + 4-layer SQL safety." },
   { date: "2026-05-03", kind: "shipped", text: "Sprint A2 — 3-tab shell skeleton: TopNav, RightDrawer, /, /candidates, /cis routes." },
   { date: "2026-05-03", kind: "infra", text: "CV generator tooling shipped: dev-tools/cv_generator/make_cvs.py + LLM prompt. First 20 .docx CVs generated locally." },
   { date: "2026-05-03", kind: "shipped", text: "Sprint A1 — Migration 004 applied via Supabase MCP: inbound_emails table, candidates extended, corpus_chunks.confidential, match_chunks RPC updated, cv-attachments bucket." },
@@ -357,7 +427,40 @@ const container = document.getElementById('root');
 const root = createRoot(container);
 root.render(React.createElement(App));
 
-// ---------- Render changelog sidebar (vanilla DOM, no React needed) ----------
+// ---------- Render sidebar panels (vanilla DOM, no React needed) ----------
+function renderNow() {
+  const claude = document.getElementById('now-claude');
+  const charle = document.getElementById('now-charle');
+  if (claude) claude.textContent = NOW.claude;
+  if (charle) charle.textContent = NOW.charle;
+}
+
+function renderSprints() {
+  const list = document.getElementById('sprint-list');
+  if (!list) return;
+  list.innerHTML = SPRINTS.map((sprint) => {
+    const fillWidth = `${Math.round(sprint.progress * 100)}%`;
+    const statusLabel = {
+      done: "done",
+      in_progress: "in progress",
+      pending: "pending",
+    }[sprint.status] || sprint.status;
+    const subSteps = (sprint.substeps || [])
+      .map(
+        (s) => `<li class="${s.status}"><strong>${s.id}</strong> ${s.label}</li>`
+      )
+      .join("");
+    return `
+      <li>
+        <span class="sprint-id">${sprint.id} ${sprint.label}</span>
+        <span class="sprint-bar ${sprint.status}"><span class="sprint-bar-fill" style="width:${fillWidth}"></span></span>
+        <span class="sprint-status ${sprint.status}">${statusLabel}</span>
+        <ul class="sprint-substeps">${subSteps}</ul>
+      </li>
+    `;
+  }).join('');
+}
+
 function renderChangelog() {
   const list = document.getElementById('changelog-list');
   if (!list) return;
@@ -380,4 +483,7 @@ function renderChangelog() {
     `;
   }).join('');
 }
+
+renderNow();
+renderSprints();
 renderChangelog();
