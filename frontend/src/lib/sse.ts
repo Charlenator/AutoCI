@@ -26,7 +26,9 @@ export type SSEEvent =
   | { type: "phase_writeup"; phase: string; writeup: PhaseWriteup }
   | { type: "connected"; session_id: string }
   | { type: "validation"; data: any }
-  | { type: "error"; data: any };
+  | { type: "interventions"; data: Record<string, unknown> }
+  | { type: "fmea"; data: Record<string, unknown> }
+  | { type: "error"; data: Record<string, unknown> };
 
 export type SSEHandler = (event: SSEEvent) => void;
 
