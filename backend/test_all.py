@@ -783,7 +783,7 @@ def level1_unit():
         test("B8: match_score is high (0.92)",
              lambda: _b8_first.get("match_score", 0) > 0.9)
 
-    # Test POST /candidates/{id}/schedule with empty slots → 400
+    # Test POST /candidates/{id}/schedule with empty slots -> 400
     _b8_sched_resp = _b8_client.post(
         "/candidates/cand-b8-test-001/schedule",
         json={"slots": [], "message": None},
@@ -792,6 +792,58 @@ def level1_unit():
 
     # Restore
     _b8_mod.RAGAgent = _orig_rag
+
+    # --- CIS Agents (05.2-05.6) ---
+
+    # 05.2 -- K_SCOPING agent
+    from api.agents.cis.k_scoping import ScopingAgent, ScopingState, ScopingTurn
+    test("05.2: ScopingAgent imports", lambda: ScopingAgent is not None)
+
+    class _FakeLLMKScoping:
+        def route(self, tag, messages, **kwargs):
+            return ('{"agent_message": "Got it.", "ready": true, "problem": "p", "scope": "s", "requested_outcomes": ["o"], "role_title": "R", "target_kpi": "time_to_fill", "confidence": 0.9}', None)
+    _scoping = ScopingAgent(_FakeLLMKScoping())
+    _state = ScopingState()
+    _new_state = _scoping.step(_state, "test problem")
+    test("05.2: scoping step sets ready true", lambda: _new_state.ready is True)
+    test("05.2: scoping step sets problem", lambda: _new_state.problem == "p")
+
+    # 05.3 -- K_TOOL_SELECTOR agent
+    from api.agents.cis.k_tool_selector import ToolSelectorAgent, ToolPlan
+    test("05.3: ToolSelectorAgent imports", lambda: ToolSelectorAgent is not None)
+
+    class _FakeLLMToolSelector:
+        def route(self, tag, messages, **kwargs):
+            return ('{"ordered": ["D1", "K1", "K2", "K4", "K6"], "reasoning": "test"}', None)
+    _selector = ToolSelectorAgent(_FakeLLMToolSelector())
+    _dummy_state = ScopingState(problem="test", scope="scope", requested_outcomes=["o"], role_title="R", target_kpi="time_to_fill", confidence=0.9, ready=True)
+    _plan = _selector.select(_dummy_state)
+    test("05.3: tool selector returns ToolPlan", lambda: isinstance(_plan, ToolPlan))
+    test("05.3: tool selector ordered list", lambda: len(_plan.ordered) > 0)
+
+    # 05.4 -- FMEA agent
+    from api.agents.cis.fmea import FMEAAgent, FMEAOutput, FMEAEntry
+    test("05.4: FMEAAgent imports", lambda: FMEAAgent is not None)
+
+    class _FakeLLMFmea:
+        def route(self, tag, messages, **kwargs):
+            return ('{"entries": [{"failure_mode": "FM", "effect": "EF", "cause": "C", "severity": 5, "occurrence": 5, "detection": 5}], "headline": "test headline"}', None)
+    _fmea = FMEAAgent(_FakeLLMFmea())
+    _fmea_result = _fmea.run(problem="test", role_title="Test Role")
+    test("05.4: fmea returns FMEAOutput", lambda: isinstance(_fmea_result, FMEAOutput))
+    test("05.4: fmea entries have RPN", lambda: len(_fmea_result.entries) > 0 and _fmea_result.entries[0].rpn == 125)
+
+    # 05.5 -- K6 linked_root_cause
+    from api.agents.kaizen.k6_improve import K6ImproveAgent, Intervention
+    test("05.5: K6ImproveAgent imports", lambda: K6ImproveAgent is not None)
+    _inv = Intervention(title="t", description="d", impact="High", effort="Low", priority_score=90, linked_root_cause="root cause text")
+    test("05.5: Intervention has linked_root_cause", lambda: _inv.linked_root_cause == "root cause text")
+
+    # 05.6 -- tool_plan parameter on run_full_kaizen
+    import inspect
+    from api.workflows.o2_meta_orchestrator import MetaOrchestrator
+    test("05.6: MetaOrchestrator has run_full_kaizen with tool_plan param",
+         lambda: "tool_plan" in inspect.signature(MetaOrchestrator.run_full_kaizen).parameters)
 
 # ── Level 2: Supabase Integration ──────────────────────────────────────────
 

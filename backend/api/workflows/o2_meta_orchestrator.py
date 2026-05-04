@@ -19,6 +19,7 @@ from api.agents.specialists.s1_query_planner import QueryPlannerAgent
 from api.agents.specialists.s2_rag import RAGAgent
 from api.agents.specialists.s3_sql_executor import SQLExecutor
 from api.agents.specialists.s4_research import ResearchAgent
+from api.agents.cis.fmea import FMEAAgent
 from api.sse import (
     push_event, make_node_event, make_phase_event, make_output_event,
     make_step_event, make_cost_event, make_phase_writeup_event,
@@ -277,6 +278,7 @@ class MetaOrchestrator:
         role_title: str = "Senior Java Developer",
         problem_brief: str | None = None,
         target_kpi: str | None = None,
+        tool_plan: list[str] | None = None,
     ) -> KaizenSessionResult:
         """Run a full DMAIC Kaizen.
 
@@ -288,10 +290,19 @@ class MetaOrchestrator:
             target_kpi: Optional KPI key (`time_to_fill`, `conversion_rate`, `offer_acceptance`).
                 When provided, the Kaizen treats this KPI as the trigger regardless of D3's
                 normal threshold logic. Used by per-KPI "Investigate" buttons.
+            tool_plan: Optional list of tool keys (e.g., ["D1", "K1", "K6"]).
+                If provided, iterate over tools in order instead of hardcoded pipeline.
+                If None, fall back to legacy hardcoded sequence.
         """
         data = self.fetch_pipeline_data(role_title=role_title)
         if not data:
             return KaizenSessionResult(session_id=session_id, phase="error")
+
+        # If a tool plan is provided, execute it and return
+        if tool_plan is not None:
+            return self._run_with_tool_plan(
+                session_id, role_title, problem_brief, target_kpi, tool_plan, data
+            )
 
         # Accumulated phase writeups — fed to the writeup agent on each new phase
         # so it can reference prior findings without re-deriving them.
@@ -681,4 +692,143 @@ class MetaOrchestrator:
             detection=detection_result, define=define.__dict__,
             measure=measure.__dict__, analyse=analyse.__dict__,
             improve=improve.__dict__, control=control.__dict__,
+        )
+
+    def _run_with_tool_plan(
+        self,
+        session_id: str,
+        role_title: str,
+        problem_brief: str | None,
+        target_kpi: str | None,
+        tool_plan: list[str],
+        data: dict,
+    ) -> KaizenSessionResult:
+        """Execute a custom tool plan from K_TOOL_SELECTOR."""
+        import logging
+        prior_writeups = []
+        detection_result = {}
+        root_causes: list[str] = []
+
+        # We'll treat the session as already having a kaizen_sessions row inserted by the caller.
+        # The caller (routes/cis.py) will insert the session row.
+
+        for tool in tool_plan:
+            tool = tool.strip().upper()
+            if tool == "D1":
+                self._sse(session_id, make_node_event("D1", "active", "Internal Benchmarking"))
+                self._out(session_id, "detection", "D1", "📊 Computing pipeline metrics...")
+                internal = self.d1.run(
+                    data["pipeline_events"], data["hires"],
+                    data["candidates"], data["offer_outcomes"],
+                )
+                internal = internal[0] if isinstance(internal, tuple) else internal
+                self._sse(session_id, make_node_event("D1", "complete"))
+                detection_result["internal"] = internal.__dict__
+                # emit some output
+                self._out(session_id, "detection", "D1", f"**Time to Fill**: {internal.time_to_fill_days} days")
+            elif tool == "D2":
+                self._sse(session_id, make_node_event("D2", "active", "External Benchmarking"))
+                external = self.d2.run_multi_kpi(role_title, getattr(internal, "kpis", {}))
+                self._sse(session_id, make_node_event("D2", "complete"))
+                detection_result["external"] = external
+            elif tool == "D3":
+                self._sse(session_id, make_node_event("D3", "active", "Gap Analysis"))
+                gap = self.d3.analyze(getattr(internal, "__dict__", {}), detection_result.get("external", {}), session_id=session_id)
+                self._sse(session_id, make_node_event("D3", "complete"))
+                detection_result["gap"] = gap.__dict__
+            elif tool == "K1":
+                self._sse(session_id, make_phase_event("define", "start"))
+                define = self.k1.run(
+                    detection_result.get("gap", {}),
+                    session_id=session_id,
+                    problem_brief=problem_brief,
+                    target_kpi=target_kpi,
+                    role_title=role_title,
+                )
+                self._sse(session_id, make_phase_event("define", "complete"))
+                self._emit_writeup(session_id, "define", define.__dict__, prior_writeups,
+                                   role_title, problem_brief, data)
+                # HITL gate
+                if not self._await_hitl(session_id, "define", role_title, problem_brief, data):
+                    return KaizenSessionResult(session_id=session_id, phase="aborted", detection=detection_result)
+            elif tool == "K2":
+                self._sse(session_id, make_phase_event("measure", "start"))
+                measure = self.k2.run(
+                    data["pipeline_events"], data["hires"],
+                    data["candidates"], data["offer_outcomes"],
+                    session_id=session_id,
+                )
+                self._sse(session_id, make_phase_event("measure", "complete"))
+                self._emit_writeup(session_id, "measure", measure.__dict__, prior_writeups,
+                                   role_title, problem_brief, data)
+                if not self._await_hitl(session_id, "measure", role_title, problem_brief, data):
+                    return KaizenSessionResult(session_id=session_id, phase="aborted", detection=detection_result)
+            elif tool in ("K3", "K4", "K5"):
+                # Run analyse phase (K3 host which includes K4/K5)
+                self._sse(session_id, make_phase_event("analyse", "start"))
+                analyse = self.k3.run(
+                    problem_brief or "Problem",
+                    session_id=session_id,
+                    on_step=lambda aid, lbl, prog, tot: self._sse(session_id, make_step_event(aid, lbl, prog, tot)),
+                )
+                self._sse(session_id, make_phase_event("analyse", "complete"))
+                # Collect root causes
+                for rc in getattr(analyse, "root_causes", []):
+                    factors = rc.get("causal_factors", [])
+                    root_causes.extend(factors)
+                self._emit_writeup(session_id, "analyse", analyse.__dict__, prior_writeups,
+                                   role_title, problem_brief, data)
+                if not self._await_hitl(session_id, "analyse", role_title, problem_brief, data):
+                    return KaizenSessionResult(session_id=session_id, phase="aborted", detection=detection_result)
+            elif tool == "K6":
+                self._sse(session_id, make_phase_event("improve", "start"))
+                improve = self.k6.run(
+                    str(root_causes),
+                    "synthesised findings",
+                    session_id=session_id,
+                    linked_root_causes=root_causes,
+                )
+                self._sse(session_id, make_phase_event("improve", "complete"))
+                # Insert interventions into DB
+                interventions_list = getattr(improve, "interventions", [])
+                for inv in interventions_list:
+                    try:
+                        self.supabase.table("interventions").insert({
+                            "session_id": session_id,
+                            "title": getattr(inv, "title", ""),
+                            "description": getattr(inv, "description", ""),
+                            "linked_root_cause": getattr(inv, "linked_root_cause", ""),
+                            "impact": getattr(inv, "impact", ""),
+                            "effort": getattr(inv, "effort", ""),
+                            "priority": getattr(inv, "priority_score", None),
+                            "owner": None,
+                            "due_date": None,
+                            "status": "proposed",
+                        }).execute()
+                    except Exception as e:
+                        logging.warning(f"Failed to insert intervention: {e}")
+                # Emit interventions event
+                self._sse(session_id, {"type": "interventions", "data": [inv.__dict__ for inv in interventions_list]})
+                self._emit_writeup(session_id, "improve", improve.__dict__, prior_writeups,
+                                   role_title, problem_brief, data)
+                if not self._await_hitl(session_id, "improve", role_title, problem_brief, data):
+                    return KaizenSessionResult(session_id=session_id, phase="aborted", detection=detection_result)
+            elif tool == "FMEA":
+                self._sse(session_id, make_phase_event("fmea", "start"))
+                fmea_agent = self.fmea
+                fmea_result = fmea_agent.run(
+                    problem=problem_brief or "General",
+                    role_title=role_title,
+                    session_id=session_id,
+                )
+                self._sse(session_id, make_phase_event("fmea", "complete"))
+                # Emit fmea event
+                self._sse(session_id, {"type": "fmea", "data": fmea_result.__dict__})
+            else:
+                logging.warning(f"Unknown tool in tool_plan: {tool}")
+
+        # After executing plan, return result (simplified)
+        return KaizenSessionResult(
+            session_id=session_id, phase="complete",
+            detection=detection_result if detection_result else None,
         )

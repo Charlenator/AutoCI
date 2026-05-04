@@ -19,7 +19,7 @@ from api.tools.t3_litellm_router import LiteLLMRouter
 SYSTEM_PROMPT = """You are a Six Sigma improvement specialist generating interventions for a Kaizen.
 
 Inputs you receive:
-- The confirmed root causes (from K4 Five Whys + K5 Ishikawa)
+- The confirmed root causes (from K4 Five Whys + K5 Ishikawa) — these are passed as a list of root cause texts
 - The analysis findings synthesis
 - Optionally: relevant case studies from prior Kaizens (cite them by R-ID when an intervention has direct precedent)
 
@@ -28,12 +28,13 @@ Generate 5-8 distinct, executable interventions. For each:
 - description: 1-2 sentences. State what gets done and what changes as a result.
 - impact: High | Medium | Low — *expected* effect on the target KPI. Pick the most likely outcome, not the most generous.
 - effort: High | Medium | Low — implementation cost in time / coordination / risk.
+- linked_root_cause: str — MUST cite the specific root-cause text from K4/K5 that this intervention addresses. Use verbatim text from the provided root causes list.
 - evidence_id (optional): the R-ID of a case study that supports this intervention. Omit if none applies — don't invent one.
 
 Output: ONLY a JSON object with one key, "interventions", containing the list. No prose, no markdown fences:
 {
   "interventions": [
-    {"title": "...", "description": "...", "impact": "High", "effort": "Low", "evidence_id": "R3"},
+    {"title": "...", "description": "...", "impact": "High", "effort": "Low", "linked_root_cause": "Slow interviewer feedback", "evidence_id": "R3"},
     ...
   ]
 }"""
@@ -46,6 +47,7 @@ class Intervention:
     impact: str  # High | Medium | Low
     effort: str  # High | Medium | Low
     priority_score: int  # 1-100, derived from impact + effort
+    linked_root_cause: str = ""  # The K4/K5 finding text this intervention addresses
     evidence_id: str | None = None  # R-ID of the supporting case study, if any
 
 
@@ -89,16 +91,22 @@ class K6ImproveAgent:
         analysis_findings: str,
         session_id: str | None = None,
         citation_id_offset: int = 0,
+        linked_root_causes: list[str] | None = None,
     ) -> ImproveOutput:
         """Generate prioritised interventions. `citation_id_offset` shifts R-IDs so they don't
-        collide with K4/K5's citations from the analyse phase."""
+        collide with K4/K5's citations from the analyse phase.
+        `linked_root_causes` is a list of root cause texts from K4/K5 for linking."""
         rag_block, citations = self._retrieve_case_studies(
             root_causes, analysis_findings, citation_id_offset
         )
 
+        # Format root causes for the prompt
+        root_cause_list = linked_root_causes or []
+        root_causes_text = "\n".join(f"  - {rc}" for rc in root_cause_text) if root_cause_list else root_causes
+
         system = SYSTEM_PROMPT + (("\n\n" + rag_block) if rag_block else "")
         user = (
-            f"Root causes:\n{root_causes}\n\n"
+            f"Root causes:\n{root_causes_text}\n\n"
             f"Analysis findings:\n{analysis_findings}"
         )
 
@@ -205,12 +213,25 @@ class K6ImproveAgent:
                 evidence_id = ev.strip()
             else:
                 evidence_id = None
+            # Validate linked_root_cause
+            linked_rc = raw.get("linked_root_cause", "").strip()
+            if linked_rc and linked_root_causes:
+                # Check if it matches any supplied root cause (case-insensitive substring)
+                match_found = any(linked_rc.lower() in rc.lower() or rc.lower() in linked_rc.lower() for rc in linked_root_causes)
+                if not match_found:
+                    linked_rc = "(unlinked)"
+                    import logging
+                    logging.warning(f"K6: intervention '{title}' linked_root_cause '{linked_rc}' did not match any supplied root cause")
+            elif not linked_rc:
+                linked_rc = "(unlinked)"
+
             interventions.append(Intervention(
                 title=title[:80],
                 description=description[:300],
                 impact=impact,
                 effort=effort,
                 priority_score=priority,
+                linked_root_cause=linked_rc[:300],
                 evidence_id=evidence_id,
             ))
         return interventions
