@@ -12,14 +12,13 @@ import {
 } from "../../lib/chat-types";
 import CitationChip from "./CitationChip";
 import CitationDrawer from "./CitationDrawer";
-import QueryTransformationCard from "./QueryTransformationCard";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 const SUGGESTIONS = [
   "What is our average time to fill for Java Developers?",
   "Show me the offer acceptance rate for UX Designer.",
-  "What is DMAIC and how does AutoCI use it?",
+  "Do we have any applicants with project management skills?",
 ];
 
 type ChatTurn =
@@ -42,6 +41,7 @@ export default function ChatPanel() {
   const [draft, setDraft] = useState("");
   const [activeCitation, setActiveCitation] = useState<{ turnId: string; citationIndex: number } | null>(null);
   const idCounter = useRef(0);
+
 
   const newId = useCallback(() => {
     idCounter.current += 1;
@@ -78,6 +78,10 @@ export default function ChatPanel() {
         liveSearch: data.live_search ?? null,
       };
       setTurns((t) => [...t, assistantTurn]);
+      // Auto-open the sources drawer on the first citation
+      if (citations.length > 0) {
+        setActiveCitation({ turnId: assistantTurn.id, citationIndex: citations[0].index });
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setTurns((t) => [
@@ -110,13 +114,19 @@ export default function ChatPanel() {
     setDraft(text);
   };
 
-  const drawerAssistantTurn = activeCitation
+  // Determine which assistant turn is currently active in the drawer
+  const drawerTurnAssistant = activeCitation
     ? turns.find(
         (t): t is Extract<ChatTurn, { role: "assistant" }> =>
           t.role === "assistant" && t.id === activeCitation.turnId
       )
     : undefined;
-  const drawerCitations = drawerAssistantTurn?.citations ?? [];
+  // Fall back to the last assistant turn with citations if no specific citation active
+  const effectiveAssistant = drawerTurnAssistant ?? [...turns].reverse().find(
+    (t): t is Extract<ChatTurn, { role: "assistant" }> =>
+      t.role === "assistant" && t.citations.length > 0
+  );
+  const drawerCitations = effectiveAssistant?.citations ?? [];
   const drawerActiveIndex = activeCitation?.citationIndex ?? null;
 
   return (
@@ -207,13 +217,16 @@ export default function ChatPanel() {
         </div>
       </div>
 
-      {activeCitation && (
-        <CitationDrawer
-          citations={drawerCitations}
-          activeIndex={drawerActiveIndex}
-          onClose={() => setActiveCitation(null)}
-        />
-      )}
+        {effectiveAssistant && (
+          <CitationDrawer
+            citations={drawerCitations}
+            activeIndex={drawerActiveIndex}
+            plan={effectiveAssistant?.plan ?? null}
+            sqlResult={effectiveAssistant?.sqlResult ?? null}
+            ragChunkCount={effectiveAssistant?.ragChunkCount ?? 0}
+            liveSearch={effectiveAssistant?.liveSearch ?? null}
+          />
+        )}
     </div>
   );
 }
@@ -261,15 +274,6 @@ function AssistantMessage({
         <div className="dot">AI</div>
         <span>Assistant</span>
       </div>
-
-      {turn.plan && (
-        <QueryTransformationCard
-          plan={turn.plan}
-          sqlResult={turn.sqlResult}
-          ragChunkCount={turn.ragChunkCount}
-          liveSearch={turn.liveSearch}
-        />
-      )}
 
       {turn.content && (
         <div className="assistant-bubble">{turn.content}</div>

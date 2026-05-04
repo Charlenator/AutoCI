@@ -1,38 +1,100 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { CandidateCard } from "../lib/chat-types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+type SortKey = "name" | "match_score" | "skills" | "flags";
+type SortDir = "asc" | "desc";
 
 interface CandidateTableProps {
   rows: CandidateCard[];
   onSchedule: (card: CandidateCard) => void;
 }
 
+function initials(name: string | null): string {
+  if (!name) return "?";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  return parts[0][0].toUpperCase();
+}
+
 export default function CandidateTable({ rows, onSchedule }: CandidateTableProps) {
+  const [sortKey, setSortKey] = useState<SortKey>("match_score");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  const toggleSort = useCallback(
+    (key: SortKey) => {
+      if (key === sortKey) {
+        setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+      } else {
+        setSortKey(key);
+        setSortDir("desc");
+      }
+    },
+    [sortKey],
+  );
+
+  const sorted = useMemo(() => {
+    const copy = [...rows];
+    copy.sort((a, b) => {
+      let cmp = 0;
+      switch (sortKey) {
+        case "name":
+          cmp = (a.name ?? "").localeCompare(b.name ?? "");
+          break;
+        case "match_score":
+          cmp = a.match_score - b.match_score;
+          break;
+        case "skills":
+          cmp = a.skills.length - b.skills.length;
+          break;
+        case "flags": {
+          const aFlags = (a.is_duplicate ? 1 : 0) + a.missing_fields.length + (a.confidential ? 1 : 0);
+          const bFlags = (b.is_duplicate ? 1 : 0) + b.missing_fields.length + (b.confidential ? 1 : 0);
+          cmp = aFlags - bFlags;
+          break;
+        }
+      }
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+    return copy;
+  }, [rows, sortKey, sortDir]);
+
+  const sortIndicator = (key: SortKey) => {
+    if (key !== sortKey) return "";
+    return sortDir === "asc" ? " ▲" : " ▼";
+  };
+
   if (rows.length === 0) return null;
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-gray-200 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-            <th className="py-3 pr-4">Candidate</th>
-            <th className="py-3 pr-4">Skills</th>
-            <th className="py-3 pr-4">Match</th>
-            <th className="py-3 pr-4">Flags</th>
-            <th className="py-3 pr-4">CV</th>
-            <th className="py-3">Actions</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-100">
-          {rows.map((row) => (
-            <CandidateRow key={row.id} row={row} onSchedule={onSchedule} />
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <table className="cand-table">
+      <thead>
+        <tr>
+          <th onClick={() => toggleSort("name")} style={{ cursor: "pointer", userSelect: "none" }}>
+            Candidate{sortIndicator("name")}
+          </th>
+          <th onClick={() => toggleSort("skills")} style={{ cursor: "pointer", userSelect: "none" }}>
+            Skills{sortIndicator("skills")}
+          </th>
+          <th onClick={() => toggleSort("match_score")} style={{ cursor: "pointer", userSelect: "none", width: 130 }}>
+            Match{sortIndicator("match_score")}
+          </th>
+          <th onClick={() => toggleSort("flags")} style={{ cursor: "pointer", userSelect: "none", width: 140 }}>
+            Flags{sortIndicator("flags")}
+          </th>
+          <th style={{ width: 100 }}>CV</th>
+          <th style={{ width: 160 }}>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {sorted.map((row) => (
+          <CandidateRow key={row.id} row={row} onSchedule={onSchedule} />
+        ))}
+      </tbody>
+    </table>
   );
 }
 
@@ -46,7 +108,7 @@ function CandidateRow({
   const [cvError, setCvError] = useState<string | null>(null);
   const [cvLoading, setCvLoading] = useState(false);
 
-  const handleDownloadCv = async () => {
+  const handleDownloadCv = useCallback(async () => {
     if (!row.cv_storage_path) return;
     setCvLoading(true);
     setCvError(null);
@@ -64,99 +126,125 @@ function CandidateRow({
     } finally {
       setCvLoading(false);
     }
-  };
+  }, [row]);
 
-  const skillChips = row.skills.slice(0, 5);
-  const extraCount = row.skills.length - 5;
+  // Skills: show up to 3 rows (max ~15 skills with compact tags)
+  const maxDisplayed = 15;
+  const displayed = row.skills.slice(0, maxDisplayed);
+  const extraCount = row.skills.length - maxDisplayed;
 
   return (
-    <tr className="hover:bg-gray-50">
+    <tr>
       {/* Candidate */}
-      <td className="py-3 pr-4">
-        <div className="font-medium text-gray-900">{row.name || "—"}</div>
-        <div className="text-xs text-gray-400 mt-0.5">{row.email}</div>
-        {row.phone && <div className="text-xs text-gray-400">{row.phone}</div>}
+      <td>
+        <div className="cand-name">
+          <div className="cand-avatar">{initials(row.name)}</div>
+          <div>
+            <div>{row.name || "—"}</div>
+            <div className="cand-sub">
+              {row.email}
+              {row.phone && <> · {row.phone}</>}
+            </div>
+          </div>
+        </div>
       </td>
 
-      {/* Skills */}
-      <td className="py-3 pr-4">
-        <div className="flex flex-wrap gap-1">
-          {skillChips.map((skill) => (
-            <span
-              key={skill}
-              className="inline-block bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded"
-            >
+      {/* Skills — tightly grouped, up to 3 rows */}
+      <td>
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "3px",
+            maxHeight: "68px", // ~3 rows of compact tags
+            overflow: "hidden",
+          }}
+        >
+          {displayed.map((skill) => (
+            <span key={skill} className="tag">
               {skill}
             </span>
           ))}
           {extraCount > 0 && (
-            <span className="inline-block text-xs text-gray-400 px-1">
-              +{extraCount} more
+            <span
+              style={{
+                fontSize: "10.5px",
+                color: "var(--muted)",
+                fontFamily: "var(--font-mono)",
+                padding: "1px 5px",
+              }}
+            >
+              +{extraCount}
             </span>
           )}
         </div>
       </td>
 
-      {/* Match */}
-      <td className="py-3 pr-4">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-gray-700 w-10">
-            {Number(row.match_score).toFixed(2)}
-          </span>
-          <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-blue-500 rounded-full"
-              style={{ width: `${Math.min(Number(row.match_score) * 100, 100)}%` }}
-            />
+      {/* Match — rendered as percentage */}
+      <td>
+        <div className="score">
+          <span>{(row.match_score * 100).toFixed(0)}%</span>
+          <div className="score-bar">
+            <i style={{ width: `${Math.min(row.match_score * 100, 100)}%` }} />
           </div>
         </div>
       </td>
 
       {/* Flags */}
-      <td className="py-3 pr-4">
-        <div className="flex flex-wrap gap-1">
-          {row.is_duplicate && (
-            <span className="inline-block bg-yellow-50 text-yellow-700 text-xs px-2 py-0.5 rounded border border-yellow-200">
-              Duplicate
-            </span>
-          )}
+      <td>
+        <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+          {row.is_duplicate && <span className="flag">Duplicate</span>}
           {row.missing_fields.length > 0 && (
-            <span className="inline-block bg-orange-50 text-orange-700 text-xs px-2 py-0.5 rounded border border-orange-200">
+            <span className="flag">
               {row.missing_fields.length} missing
             </span>
           )}
-          {row.confidential && (
-            <span className="inline-block bg-purple-50 text-purple-700 text-xs px-2 py-0.5 rounded border border-purple-200">
-              Confidential
+          {row.confidential && <span className="flag ok">Confidential</span>}
+          {!row.is_duplicate && row.missing_fields.length === 0 && !row.confidential && (
+            <span className="flag ok" style={{ color: "var(--muted)" }}>
+              OK
             </span>
           )}
         </div>
       </td>
 
       {/* CV */}
-      <td className="py-3 pr-4">
+      <td>
         <button
           type="button"
           onClick={() => void handleDownloadCv()}
           disabled={!row.cv_storage_path || cvLoading}
-          className="text-blue-600 text-xs font-medium hover:underline disabled:text-gray-300 disabled:no-underline disabled:cursor-not-allowed"
+          className="row-btn"
+          style={{ fontSize: "11.5px" }}
         >
           {cvLoading ? "Loading…" : "Download"}
         </button>
         {cvError && (
-          <span className="block text-red-600 text-xs mt-0.5">{cvError}</span>
+          <span
+            style={{
+              display: "block",
+              color: "var(--accent)",
+              fontSize: "10.5px",
+              marginTop: "2px",
+              fontFamily: "var(--font-mono)",
+            }}
+          >
+            {cvError}
+          </span>
         )}
       </td>
 
       {/* Actions */}
-      <td className="py-3">
-        <button
-          type="button"
-          onClick={() => onSchedule(row)}
-          className="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded hover:bg-green-700"
-        >
-          Schedule Meeting
-        </button>
+      <td>
+        <div className="row-actions">
+          <button
+            type="button"
+            onClick={() => onSchedule(row)}
+            className="row-btn primary"
+          >
+            Schedule Meeting
+          </button>
+        </div>
       </td>
     </tr>
   );

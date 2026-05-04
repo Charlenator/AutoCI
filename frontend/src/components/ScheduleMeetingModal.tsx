@@ -158,22 +158,23 @@ export default function ScheduleMeetingModal({
     slotsState.status === "loaded" ? groupSlotsByDate(slotsState.slots) : [];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl shadow-xl max-w-lg w-full mx-4 max-h-[80vh] flex flex-col">
+    <div className="modal-backdrop" style={{ justifyContent: "center" }}>
+      <div className="bg-[var(--paper)] rounded-[var(--r-lg)] shadow-xl max-w-lg w-full mx-4 max-h-[80vh] flex flex-col" style={{ borderRadius: "var(--r-lg)" }}>
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid var(--line)" }}>
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">
+            <h2 style={{ fontSize: "18px", fontWeight: 600, color: "var(--ink)", margin: 0 }}>
               Schedule Meeting
             </h2>
-            <p className="text-sm text-gray-500 mt-0.5">
+            <p style={{ fontSize: "13px", color: "var(--text-soft)", marginTop: "4px" }}>
               {candidate.name || "Candidate"}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+            className="btn-ghost"
+            style={{ fontSize: "18px", padding: "4px 8px", lineHeight: 1 }}
             aria-label="Close"
           >
             &times;
@@ -222,11 +223,13 @@ export default function ScheduleMeetingModal({
                         type="button"
                         onClick={() => toggleSlot(globalIdx)}
                         disabled={!isSelected && selected.size >= 3}
-                        className={`text-xs px-3 py-1.5 rounded border font-medium transition-colors ${
-                          isSelected
-                            ? "bg-blue-600 text-white border-blue-600"
-                            : "bg-white text-gray-700 border-gray-300 hover:border-blue-400"
-                        } disabled:opacity-40 disabled:cursor-not-allowed`}
+                        className="row-btn"
+                        style={{
+                          fontSize: "11.5px",
+                          ...(isSelected
+                            ? { background: "var(--ink)", color: "#fff", borderColor: "var(--ink)" }
+                            : {}),
+                        }}
                       >
                         {startTime}&ndash;{endTime}
                       </button>
@@ -269,11 +272,11 @@ export default function ScheduleMeetingModal({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+        <div className="px-6 py-4" style={{ borderTop: "1px solid var(--line)", display: "flex", justifyContent: "flex-end", gap: "8px" }}>
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+            className="btn btn-ghost"
           >
             Cancel
           </button>
@@ -281,7 +284,7 @@ export default function ScheduleMeetingModal({
             type="button"
             onClick={() => void handleSend()}
             disabled={selected.size === 0 || sending || slotsState.status !== "loaded"}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn btn-primary"
           >
             {sending ? "Sending…" : "Send"}
           </button>

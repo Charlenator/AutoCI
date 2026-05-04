@@ -61,7 +61,7 @@ export default function Sidebar() {
         <div className="brand">
           <div className="brand-mark">A</div>
           <div>
-            <div className="brand-name">AutoCI</div>
+            <div className="brand-name">RAGcruitment</div>
             <div className="brand-sub">recruitment analytics</div>
           </div>
         </div>
