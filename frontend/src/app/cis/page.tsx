@@ -328,7 +328,7 @@ export default function CISPage() {
           {!scopingState.ready && scopingState.turns.length === 0 && (
             <div className="max-w-lg mx-auto mt-16 text-center">
               <h2 className="text-lg font-semibold text-gray-800 mb-2">
-                Continuous Improvement Suite
+                [Under Construction] Continuous Improvement Suite
               </h2>
               <p className="text-sm text-gray-500 mb-6">
                 Describe a problem you want to investigate. The scoping agent
