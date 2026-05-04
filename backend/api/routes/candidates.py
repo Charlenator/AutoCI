@@ -70,6 +70,70 @@ class ScheduleResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Email helpers
+# ---------------------------------------------------------------------------
+
+
+def build_slot_row(label: str, time_str: str, url: str) -> str:
+    return f"""
+    <tr>
+      <td style="padding:10px 0;border-bottom:0.5px solid #f3f4f6;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <p style="margin:0;font-size:14px;color:#111827;font-weight:500;">{label}</p>
+            <p style="margin:2px 0 0;font-size:13px;color:#6b7280;">{time_str} &middot; 30 minutes</p>
+          </div>
+          <a href="{url}" style="background:#111827;color:#ffffff;font-size:12px;font-weight:500;padding:7px 14px;border-radius:6px;text-decoration:none;white-space:nowrap;">Book</a>
+        </div>
+      </td>
+    </tr>"""
+
+
+def build_invite_html(
+    greeting: str,
+    recruiter_msg: str,
+    slot_rows_html: str,
+    footer: str,
+) -> str:
+    recruiter_block = ""
+    if recruiter_msg:
+        recruiter_block = f"""
+    <div style="background:#f9fafb;border:0.5px solid #e5e7eb;border-radius:8px;padding:14px 16px;margin-bottom:24px;">
+      <p style="font-size:11px;color:#9ca3af;margin:0 0 4px;text-transform:uppercase;letter-spacing:0.06em;font-weight:500;">Note from the recruiter</p>
+      <p style="font-size:13px;color:#374151;margin:0;line-height:1.5;font-style:italic;">{recruiter_msg}</p>
+    </div>"""
+
+    return f"""<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+<div style="max-width:520px;margin:32px auto;">
+
+  <div style="background:#111827;padding:18px 28px;border-radius:10px 10px 0 0;">
+    <span style="font-size:14px;font-weight:500;color:#f9fafb;letter-spacing:0.01em;">Interview Invitation</span>
+  </div>
+
+  <div style="background:#ffffff;padding:28px 28px 0;">
+    <p style="font-size:16px;font-weight:500;color:#111827;margin:0 0 8px;">{greeting}</p>
+    <p style="font-size:14px;color:#4b5563;line-height:1.6;margin:0 0 20px;">
+      We'd love to meet you. Please choose an interview time that works best for you — it only takes a moment to book.
+    </p>
+    {recruiter_block}
+    <p style="font-size:11px;color:#9ca3af;margin:0 0 10px;text-transform:uppercase;letter-spacing:0.06em;font-weight:500;">Available times</p>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:28px;">
+      {slot_rows_html}
+    </table>
+  </div>
+
+  <div style="background:#ffffff;padding:16px 28px 20px;border-top:0.5px solid #f3f4f6;border-radius:0 0 10px 10px;">
+    <p style="font-size:12px;color:#9ca3af;margin:0;line-height:1.6;">{footer}</p>
+  </div>
+
+</div>
+</body>
+</html>"""
+
+
+# ---------------------------------------------------------------------------
 # POST /candidates/search
 # ---------------------------------------------------------------------------
 
@@ -86,7 +150,7 @@ async def search_candidates(body: SearchRequest, request: Request):
         return SearchResponse(results=[])
 
     # Group chunks by candidate_id; keep the highest-similarity chunk per ID.
-    best: dict[str, tuple[float, dict]] = {}  # candidate_id -> (similarity, chunk)
+    best: dict[str, tuple[float, dict]] = {}
     for c in chunks:
         raw_meta = c.get("metadata") or {}
         if isinstance(raw_meta, str):
@@ -106,10 +170,11 @@ async def search_candidates(body: SearchRequest, request: Request):
     if not best:
         return SearchResponse(results=[])
 
-    # Sort by similarity descending to get the top N candidate_ids.
-    sorted_ids = [cid for cid, _ in sorted(best.items(), key=lambda x: float(x[1][0]), reverse=True)]
+    sorted_ids = [
+        cid
+        for cid, _ in sorted(best.items(), key=lambda x: float(x[1][0]), reverse=True)
+    ]
 
-    # Fetch full candidate rows from the database.
     try:
         db_resp = (
             supabase.table("candidates")
@@ -127,7 +192,7 @@ async def search_candidates(body: SearchRequest, request: Request):
     for cid in sorted_ids:
         row = rows_by_id.get(cid)
         if row is None:
-            continue  # chunk references a deleted candidate
+            continue
 
         sim = best[cid][0]
         skills_raw = row.get("skills_json") or []
@@ -155,19 +220,21 @@ async def search_candidates(body: SearchRequest, request: Request):
         if not isinstance(missing, list):
             missing = []
 
-        cards.append(CandidateCard(
-            id=cid,
-            name=row.get("name"),
-            email=row.get("email"),
-            phone=row.get("phone"),
-            skills=top_skills,
-            experience_summary=summary,
-            match_score=round(sim, 4),
-            is_duplicate=bool(row.get("is_duplicate", False)),
-            missing_fields=missing,
-            cv_storage_path=row.get("cv_storage_path"),
-            confidential=bool(row.get("confidential", False)),
-        ))
+        cards.append(
+            CandidateCard(
+                id=cid,
+                name=row.get("name"),
+                email=row.get("email"),
+                phone=row.get("phone"),
+                skills=top_skills,
+                experience_summary=summary,
+                match_score=round(sim, 4),
+                is_duplicate=bool(row.get("is_duplicate", False)),
+                missing_fields=missing,
+                cv_storage_path=row.get("cv_storage_path"),
+                confidential=bool(row.get("confidential", False)),
+            )
+        )
 
     return SearchResponse(results=cards)
 
@@ -225,14 +292,12 @@ async def schedule_candidate(candidate_id: str, body: ScheduleRequest, request: 
     """Send an HTML invite email with booking links for the selected slots."""
     supabase = request.state.supabase
 
-    # Validate slot count
     if not body.slots or len(body.slots) > 3:
         raise HTTPException(
             status_code=400,
             detail="Must provide between 1 and 3 slots",
         )
 
-    # Look up candidate
     try:
         resp = (
             supabase.table("candidates")
@@ -247,61 +312,44 @@ async def schedule_candidate(candidate_id: str, body: ScheduleRequest, request: 
     if not rows:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
-    name = rows[0].get("name") or "Candidate"
+    name = rows[0].get("name") or "there"
     email = rows[0].get("email")
     if not email:
         raise HTTPException(status_code=400, detail="Candidate has no email address")
 
-    # Build the HTML invite
     greeting = html_mod.escape(f"Hi {name},")
+    recruiter_msg = html_mod.escape(body.message) if body.message else ""
     footer = html_mod.escape("AutoCI — Recruitment Analytics Platform")
 
-    recruiter_msg = ""
-    if body.message:
-        escaped_msg = html_mod.escape(body.message)
-        recruiter_msg = f'<p style="margin:12px 0;font-style:italic;">{escaped_msg}</p>'
-
     slot_rows_html = ""
-    for i, slot in enumerate(body.slots):
-        # Parse the start timestamp for a human-friendly label
+    for slot in body.slots:
         try:
             dt = datetime.fromisoformat(slot.start.replace("Z", "+00:00"))
-            formatted = dt.strftime("%A %B %-d, %I:%M %p")
+            label = dt.strftime("%A, %-d %B")
+            time_str = dt.strftime("%-I:%M %p")
         except (ValueError, TypeError):
-            formatted = slot.start
+            label = slot.start
+            time_str = ""
 
-        slot_rows_html += (
-            f'<tr>'
-            f'<td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">'
-            f'<a href="{html_mod.escape(slot.booking_url)}" '
-            f'style="display:inline-block;padding:10px 20px;background:#2563eb;'
-            f'color:#fff;text-decoration:none;border-radius:6px;font-weight:600;">'
-            f'{html_mod.escape(formatted)}</a>'
-            f'</td>'
-            f'</tr>'
+        slot_rows_html += build_slot_row(
+            label=label,
+            time_str=time_str,
+            url=html_mod.escape(slot.booking_url),
         )
 
-    html_body = f"""<!DOCTYPE html>
-<html>
-<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-<div style="max-width:520px;margin:24px auto;padding:24px;background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;">
-  <p style="font-size:16px;color:#111827;">{greeting}</p>
-  <p style="font-size:14px;color:#374151;">A recruiter has invited you to schedule an interview. Please pick a time that works for you:</p>
-  {recruiter_msg}
-  <table style="width:100%;border-collapse:collapse;margin:16px 0;">
-    {slot_rows_html}
-  </table>
-  <p style="font-size:12px;color:#6b7280;margin-top:24px;">{footer}</p>
-</div>
-</body>
-</html>"""
+    html_body = build_invite_html(
+        greeting=greeting,
+        recruiter_msg=recruiter_msg,
+        slot_rows_html=slot_rows_html,
+        footer=footer,
+    )
 
-    # Send via Resend
     try:
         resend = ResendClient()
         result = resend.send_email(
-            to=email,
-            subject="Interview slots available",
+            #actual candidate email to=email, 
+            to="charlecoetzee@gmail.com", # for testing
+            subject="Interview Invitation",
             html=html_body,
             from_email="AutoCI <recruitment@wabi-ai.tech>",
         )
