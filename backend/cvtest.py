@@ -23,9 +23,9 @@ ENV_PATH = os.path.join(os.path.dirname(__file__), ".env")
 
 # Pick one CV — thabo_mokoena_senior_java_developer is a named person with
 # skills, experience, and education that will exercise all chunk types.
-CV_FILENAME = "thabo_mokoena_senior_java_developer.docx"
-SENDER = "recruiter@example.com"
-SUBJECT = "CV Submission: Thabo Mokoena"
+CV_FILENAME = "kagiso_sekhoane_data_scientist.docx"
+SENDER = "hiring@techco.co.za"
+SUBJECT = "CV Submission: Kagiso Sekhoane"
 
 # ── Helpers ───────────────────────────────────────────────────────────────
 
