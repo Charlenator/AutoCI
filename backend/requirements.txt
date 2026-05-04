@@ -11,6 +11,7 @@ python-dotenv
 sse-starlette
 apscheduler
 python-multipart
+docx
 
 # Embeddings (Migration 006: switched from OpenAI ada-002 to local bge-small-en-v1.5).
 # sentence-transformers pulls in torch; ~500MB image cost on Modal but free

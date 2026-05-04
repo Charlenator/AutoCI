@@ -1,45 +1,64 @@
-// AutoCI inbound-email webhook receiver — Sprint B4.
+// AutoCI inbound-email webhook receiver — Sprint B4 (revised for real Resend).
 //
 // Decoupled-pipeline design:
 //   1. Verify the Resend / Svix webhook signature (best-effort; skipped if no secret configured).
 //   2. Dedup on svix-id.
-//   3. Upload the first attachment to the cv-attachments storage bucket.
-//   4. INSERT into inbound_emails with status='pending'.
-//   5. Return 200 to Resend (sub-second response).
+//   3. Call Resend Attachments API to get download_url for .docx attachments only.
+//   4. Download bytes from the signed URL and upload to cv-attachments storage bucket.
+//   5. INSERT into inbound_emails with status='pending'.
+//   6. Return 200 to Resend (sub-second response).
 //
-// All heavy work — CV classification, extraction, confidentiality, vectorization —
-// lives in the Modal Python worker (Sprint B5+) which polls / is triggered to
-// process status='pending' rows.
+// NOTE: Resend webhooks include attachment *metadata* only (id, filename, content_type).
+// The actual bytes must be fetched via the Attachments API using the download_url.
+// See: https://resend.com/docs/api-reference/emails/list-received-email-attachments
 //
 // URL: https://orxdunrevazwpyzkoaob.supabase.co/functions/v1/inbound-email
 //
 // Environment expected (set via Supabase dashboard → Edge Functions → Secrets):
-//   - RESEND_WEBHOOK_SECRET (whsec_...)  — optional; signature check is skipped if missing.
+//   - RESEND_API_KEY       (re_...)           — required; used to call Resend Attachments API
+//   - RESEND_WEBHOOK_SECRET (whsec_...)        — optional; signature check is skipped if missing.
 //   - SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY are auto-injected by Supabase.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-interface ResendInboundAttachment {
-  filename?: string;
-  contentType?: string;
-  content?: string;        // base64
-  size?: number;
+interface ResendApiAttachment {
+  id: string;
+  filename: string;
+  size: number;
+  content_type: string;
+  content_disposition: string;
+  content_id: string | null;
+  download_url: string;
+  expires_at: string;
+}
+
+interface ResendAttachmentsListResponse {
+  object: "list";
+  has_more: boolean;
+  data: ResendApiAttachment[];
 }
 
 interface ResendInboundPayload {
   type?: string;
   created_at?: string;
   data?: {
+    email_id?: string;
     from?: string | { email?: string; name?: string };
     to?: string | string[] | { email?: string; name?: string }[];
     subject?: string;
     html?: string;
     text?: string;
-    attachments?: ResendInboundAttachment[];
+    attachments?: Array<{
+      id?: string;
+      filename?: string;
+      contentType?: string;
+      size?: number;
+    }>;
     headers?: Record<string, string>;
   };
 }
 
+const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_KEY =
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
@@ -48,6 +67,7 @@ const SERVICE_KEY =
 const WEBHOOK_SECRET = Deno.env.get("RESEND_WEBHOOK_SECRET") ?? "";
 
 const ATTACHMENT_BUCKET = "cv-attachments";
+const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
   auth: { persistSession: false },
@@ -103,6 +123,7 @@ Deno.serve(async (req: Request) => {
   }
 
   const email = payload.data ?? {};
+  const emailId = email.email_id ?? null;
   const sender = normalizeAddress(email.from);
   const recipient = normalizeAddress(email.to);
   const subject = email.subject ?? "";
@@ -110,35 +131,70 @@ Deno.serve(async (req: Request) => {
   const bodyHtml = email.html ?? "";
   const dedupHash = await sha256Hex(`${sender}::${subject}`);
 
-  // ---- Attachment upload (POC handles the first attachment only) -----------
+  // ---- Fetch .docx attachments via Resend API -------------------------------
   let attachmentPath: string | null = null;
   let attachmentMime: string | null = null;
   let attachmentName: string | null = null;
   let attachmentSize: number | null = null;
-  const firstAttachment = (email.attachments ?? []).find(
-    (a) => a && (a.content || (a as any).path),
-  );
 
-  if (firstAttachment && firstAttachment.content) {
+  if (emailId && RESEND_API_KEY) {
     try {
-      const bytes = base64ToUint8Array(firstAttachment.content);
-      const safeName = sanitizeFilename(firstAttachment.filename ?? "attachment.bin");
-      const path = `${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}_${safeName}`;
-      const upload = await supabase.storage.from(ATTACHMENT_BUCKET).upload(path, bytes, {
-        contentType: firstAttachment.contentType ?? "application/octet-stream",
-        upsert: false,
-      });
-      if (upload.error) {
-        console.warn(`[inbound-email] storage upload failed: ${upload.error.message}`);
+      const listResp = await fetch(
+        `https://api.resend.com/emails/receiving/${encodeURIComponent(emailId)}/attachments`,
+        {
+          headers: {
+            Authorization: `Bearer ${RESEND_API_KEY}`,
+          },
+        },
+      );
+      if (listResp.ok) {
+        const listBody: ResendAttachmentsListResponse = await listResp.json();
+        // Only process .docx attachments — skip inline images, signatures, PDFs, etc.
+        const docxAttachments = listBody.data.filter(
+          (a) => a.content_type === DOCX_MIME,
+        );
+        if (docxAttachments.length > 0) {
+          const first = docxAttachments[0];
+          console.log(
+            `[inbound-email] found .docx attachment: ${first.filename} (${first.size} bytes) downloading from Resend CDN`,
+          );
+          // Download bytes from the signed URL
+          const dlResp = await fetch(first.download_url);
+          if (dlResp.ok) {
+            const bytes = await dlResp.arrayBuffer();
+            const safeName = sanitizeFilename(first.filename);
+            const path = `${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}_${safeName}`;
+            const upload = await supabase.storage.from(ATTACHMENT_BUCKET).upload(
+              path,
+              new Uint8Array(bytes),
+              { contentType: DOCX_MIME, upsert: false },
+            );
+            if (upload.error) {
+              console.warn(`[inbound-email] storage upload failed: ${upload.error.message}`);
+            } else {
+              attachmentPath = path;
+              attachmentMime = DOCX_MIME;
+              attachmentName = first.filename;
+              attachmentSize = first.size;
+            }
+          } else {
+            console.warn(
+              `[inbound-email] failed to download attachment from Resend CDN: ${dlResp.status}`,
+            );
+          }
+        } else {
+          console.log("[inbound-email] no .docx attachments found via Resend API");
+        }
       } else {
-        attachmentPath = path;
-        attachmentMime = firstAttachment.contentType ?? null;
-        attachmentName = firstAttachment.filename ?? null;
-        attachmentSize = firstAttachment.size ?? bytes.length;
+        console.warn(
+          `[inbound-email] Resend attachments API returned ${listResp.status}: ${await listResp.text().catch(() => "(no body)")}`,
+        );
       }
     } catch (err) {
-      console.warn(`[inbound-email] failed to decode/upload attachment: ${err}`);
+      console.warn(`[inbound-email] Resend API call failed: ${err}`);
     }
+  } else if (!RESEND_API_KEY) {
+    console.warn("[inbound-email] RESEND_API_KEY not set; cannot fetch attachments");
   }
 
   // ---- Queue the row -------------------------------------------------------
