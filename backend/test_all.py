@@ -636,6 +636,163 @@ def level1_unit():
     d_good = g.check("define", {"problem_statement": "High TTF", "sipoc": {"S": "x"}})
     test("O3: good define passes", lambda: d_good.passed)
 
+    # B8 — Candidate Search routes
+    _b8_registered = ("candidates" in sys.modules.get("api.routes.candidates", {}).__name__
+                      if False else True)
+    # Actually check that the module imports cleanly
+    try:
+        from api.routes.candidates import router as _b8_router
+        _b8_import_ok = True
+    except Exception:
+        _b8_import_ok = False
+    test("B8: candidates router imports cleanly", lambda: _b8_import_ok)
+
+    from api.routes.scheduling import router as _b8_sched_router
+    test("B8: scheduling router imports cleanly", lambda: _b8_sched_router is not None)
+
+    # TestClient-based integration tests for the candidates routes
+    from fastapi.testclient import TestClient
+    from fastapi import FastAPI
+    from api.agents.specialists.s2_rag import RAGAgent, RAGResult
+
+    _b8_app = FastAPI()
+    _b8_app.include_router(_b8_router, prefix="/candidates")
+
+    # Mock supabase that returns a fixed candidate
+    class _B8MockSupabase:
+        def __init__(self):
+            self._fixed_candidate = {
+                "candidate_id": "cand-b8-test-001",
+                "name": "Java Dev",
+                "email": "java@example.com",
+                "phone": "+27 82 123 4567",
+                "skills_json": ["Java", "Spring", "SQL", "Docker", "Kubernetes", "AWS"],
+                "experience_summary": "Senior Java developer with 8 years of experience building enterprise applications.",
+                "cv_storage_path": "cvs/cand-b8-test-001.docx",
+                "is_duplicate": False,
+                "missing_fields_json": [],
+                "confidential": False,
+            }
+
+        def table(self, name):
+            _b8_last_table["val"] = name
+            return _B8MockTable(self, name)
+
+        def rpc(self, name, params=None):
+            return _B8MockRPCResponse([])
+
+        def storage(self):
+            return _B8MockStorage()
+
+    class _B8MockTable:
+        def __init__(self, parent, name):
+            self._parent = parent
+            self._name = name
+            self._filters = {}
+
+        def select(self, cols):
+            return self
+
+        def eq(self, k, v):
+            self._filters[k] = v
+            return self
+
+        def in_(self, k, vals):
+            self._filters[k] = vals
+            return self
+
+        def execute(self):
+            if self._name == "candidates":
+                if "cv_storage_path" in str(self._filters.get("candidate_id", "")):
+                    # CV path query — return just the path
+                    return _B8MockResponse([{
+                        "cv_storage_path": self._parent._fixed_candidate["cv_storage_path"]
+                    }])
+                if "name, email" in str(self._filters.get("select", "")):
+                    # schedule name/email query
+                    pass
+                # Default: return full candidate
+                return _B8MockResponse([self._parent._fixed_candidate])
+            return _B8MockResponse([])
+
+    class _B8MockResponse:
+        def __init__(self, data):
+            self.data = data
+
+    class _B8MockRPCResponse:
+        def __init__(self, data):
+            self.data = data
+        def execute(self):
+            return self
+
+    class _B8MockStorage:
+        def from_(self, bucket):
+            return self
+        def create_signed_url(self, path, expires_in):
+            return {"signedURL": f"https://storage.example.com/{path}?token=abc"}
+
+    _b8_last_table = {"val": None}
+
+    # Monkey-patch RAGAgent on the test app's module so the route uses our mock
+    _orig_rag = RAGAgent
+
+    class _B8MockRAGAgent:
+        def __init__(self, supabase):
+            pass
+        def retrieve(self, query, top_k=5, corpus_filter=None):
+            return RAGResult(
+                query=query,
+                chunks=[
+                    {
+                        "chunk_id": "chunk-001",
+                        "corpus_name": "cvs",
+                        "chunk_text": "Java developer with Spring Boot experience",
+                        "similarity": 0.92,
+                        "metadata": {"candidate_id": "cand-b8-test-001"},
+                    }
+                ],
+                context_window="Java developer with Spring Boot experience",
+            )
+
+    import api.routes.candidates as _b8_mod
+    _b8_mod.RAGAgent = _B8MockRAGAgent
+
+    @_b8_app.middleware("http")
+    async def _b8_inject_mocks(request, call_next):
+        request.state.supabase = _B8MockSupabase()
+        request.state.llm = None
+        response = await call_next(request)
+        return response
+
+    _b8_client = TestClient(_b8_app)
+
+    # Test POST /candidates/search
+    _b8_resp = _b8_client.post("/candidates/search", json={"q": "java", "limit": 3})
+    test("B8: /search returns 200", lambda: _b8_resp.status_code == 200)
+    _b8_data = _b8_resp.json()
+    test("B8: /search returns results list", lambda: isinstance(_b8_data.get("results"), list))
+    test("B8: /search returns at least one candidate",
+         lambda: len(_b8_data.get("results", [])) >= 1)
+    if _b8_data.get("results"):
+        _b8_first = _b8_data["results"][0]
+        test("B8: candidate card has id", lambda: "id" in _b8_first)
+        test("B8: candidate card has name", lambda: "name" in _b8_first)
+        test("B8: candidate card has email", lambda: "email" in _b8_first)
+        test("B8: candidate card has skills", lambda: isinstance(_b8_first.get("skills"), list))
+        test("B8: candidate card has match_score", lambda: isinstance(_b8_first.get("match_score"), (int, float)))
+        test("B8: match_score is high (0.92)",
+             lambda: _b8_first.get("match_score", 0) > 0.9)
+
+    # Test POST /candidates/{id}/schedule with empty slots → 400
+    _b8_sched_resp = _b8_client.post(
+        "/candidates/cand-b8-test-001/schedule",
+        json={"slots": [], "message": None},
+    )
+    test("B8: empty slots returns 400", lambda: _b8_sched_resp.status_code == 400)
+
+    # Restore
+    _b8_mod.RAGAgent = _orig_rag
+
 # ── Level 2: Supabase Integration ──────────────────────────────────────────
 
 def level2_supabase():

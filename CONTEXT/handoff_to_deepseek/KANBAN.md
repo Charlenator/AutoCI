@@ -27,7 +27,8 @@
 | 01.8 | Fix Edge Function: fetch .docx bytes via Resend Attachments API | 2026-05-04 | Real Resend webhooks omit attachment bytes; Edge Function v4 now calls GET /attachments and downloads from signed URL. Verified production: Pieter van der Merwe CV processed end-to-end. |
 | — | Bug fix: Level 5 e2e test FK + UUID errors | 2026-05-04 | `session_id="e2e-test-001"` not valid UUID → `str(uuid.uuid4())`. Also needed `kaizen_sessions` row insert before `run_full_kaizen` call (FK ref). Live deploy OK. |
 | 02.1 | `resend_client.py` — thin async-friendly wrapper around the Resend send API | 2026-05-04 | Code exists (written in prior session); uncommitted. Needs stage+commit. |
-| 03.1 | `cal_com_client.py` — 14-day slot grid via cal.com v2 API | 2026-05-04 | Rewritten for v2 (header auth, date-only start/end, `data` IS slots dict). 17/17 unit tests passing. Live smoke: 63 slots across 4 days for eventTypeId=5572588. `.env` has `CAL_COM_DEFAULT_EVENT_TYPE_ID` added. |
+| 03.1 | `cal_com_client.py` — 14-day slot grid via cal.com v2 API | 2026-05-04 | Rewritten for v2 (header auth, date-only start/end, `data` IS slots dict). 17/17 unit tests passing. Live smoke: 63 slots across 4 days for eventTypeId=5572588. `.env` has `CAL_COM_DEFAULT_EVENT_TYPE_ID` added. Bugfix fac21c7: booking_url now uses UTC Z-suffix + urlencode (was sending +02:00 which JS Date parsed as invalid). |
+| 04.1 | `routes/candidates.py` — /candidates/search + /candidates/{id}/cv + /candidates/{id}/schedule | 2026-05-04 | 3 routes + scheduling route. 12/12 B8 tests passing. |
 
 ## Backlog
 
@@ -35,7 +36,6 @@
 
 | ID | Sub-task | File ref |
 |---|---|---|
-| 04.1 | `routes/candidates.py` — /candidates/search + /candidates/{id}/cv + /candidates/{id}/schedule | 04_b8_candidate_search.md §1 |
 | 04.2 | `frontend/src/app/candidates/page.tsx` rewrite | 04_b8_candidate_search.md §2 |
 | 04.3 | `CandidateTable.tsx` — sortable, filterable, with row badges | 04_b8_candidate_search.md §3 |
 | 04.4 | `ScheduleMeetingModal.tsx` — slot grid + send | 04_b8_candidate_search.md §4 |
