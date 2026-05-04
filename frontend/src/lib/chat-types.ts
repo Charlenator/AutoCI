@@ -143,3 +143,29 @@ export function planRouteSummary(plan: QueryPlan): string[] {
   }
   return lines;
 }
+
+// ── B8 Candidate Search Types ──────────────────────────────────────────────
+
+export interface CandidateCard {
+  id: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  skills: string[];
+  experience_summary: string | null;
+  match_score: number;
+  is_duplicate: boolean;
+  missing_fields: string[];
+  cv_storage_path: string | null;
+  confidential: boolean;
+}
+
+export interface CandidatesSearchResponse {
+  results: CandidateCard[];
+}
+
+export interface CalSlot {
+  start: string;
+  end: string;
+  booking_url: string;
+}

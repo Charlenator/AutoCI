@@ -29,17 +29,19 @@
 | 02.1 | `resend_client.py` — thin async-friendly wrapper around the Resend send API | 2026-05-04 | Code exists (written in prior session); uncommitted. Needs stage+commit. |
 | 03.1 | `cal_com_client.py` — 14-day slot grid via cal.com v2 API | 2026-05-04 | Rewritten for v2 (header auth, date-only start/end, `data` IS slots dict). 17/17 unit tests passing. Live smoke: 63 slots across 4 days for eventTypeId=5572588. `.env` has `CAL_COM_DEFAULT_EVENT_TYPE_ID` added. Bugfix fac21c7: booking_url now uses UTC Z-suffix + urlencode (was sending +02:00 which JS Date parsed as invalid). |
 | 04.1 | `routes/candidates.py` — /candidates/search + /candidates/{id}/cv + /candidates/{id}/schedule | 2026-05-04 | 3 routes + scheduling route. 12/12 B8 tests passing. |
+| 04.2 | `frontend/src/app/candidates/page.tsx` rewrite | 2026-05-04 | "use client" page with search bar, results list, loading/empty/error states. |
+| 04.3 | `CandidateTable.tsx` — sortable, filterable, with row badges | 2026-05-04 | 6-column table: Candidate, Skills (chips +N more), Match (score + bar), Flags (duplicate/missing/confidential), CV (signed-url download), Actions (Schedule button). |
+| 04.4 | `ScheduleMeetingModal.tsx` — slot grid + send | 2026-05-04 | useReducer for slot fetch lifecycle. 14-day slot grid, 1-3 selection, custom message, POST to /schedule. Lint-clean. Build OK. |
 
-## Backlog
+## In progress
 
 ### Task 04 — B8 Candidate Search + Schedule Meeting
 
-| ID | Sub-task | File ref |
-|---|---|---|
-| 04.2 | `frontend/src/app/candidates/page.tsx` rewrite | 04_b8_candidate_search.md §2 |
-| 04.3 | `CandidateTable.tsx` — sortable, filterable, with row badges | 04_b8_candidate_search.md §3 |
-| 04.4 | `ScheduleMeetingModal.tsx` — slot grid + send | 04_b8_candidate_search.md §4 |
-| 04.5 | Wire CandidateTable + Modal into the page; smoke search → schedule → email | 04_b8_candidate_search.md §5 |
+| ID | Sub-task | File ref | Date | Notes |
+|---|---|---|---|---|
+| 04.5 | Wire CandidateTable + Modal into the page; smoke search → schedule → email | 04_b8_candidate_search.md §5 | | |
+
+## Backlog
 
 ### Task 05 — Sprint C CIS rebrand
 

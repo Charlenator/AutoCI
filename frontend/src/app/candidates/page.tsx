@@ -1,60 +1,122 @@
-// Sprint A2: Candidate Search tab skeleton. Real semantic search + table +
-// Schedule Meeting flow lands in Sprint B6-B8. Styled per style_guide.css §14.
+"use client";
+
+import { useCallback, useState } from "react";
+import type { CandidateCard, CandidatesSearchResponse } from "../../lib/chat-types";
+import CandidateTable from "../../components/CandidateTable";
+import ScheduleMeetingModal from "../../components/ScheduleMeetingModal";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function CandidatesPage() {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<CandidateCard[] | null>(null);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [schedulingFor, setSchedulingFor] = useState<CandidateCard | null>(null);
+
+  const doSearch = useCallback(async () => {
+    const q = query.trim();
+    if (!q || pending) return;
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE}/candidates/search`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ q, limit: 20 }),
+      });
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Search failed (${res.status}): ${errText}`);
+      }
+      const data: CandidatesSearchResponse = await res.json();
+      setResults(data.results ?? []);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
+      setResults([]);
+    } finally {
+      setPending(false);
+    }
+  }, [query, pending]);
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      void doSearch();
+    }
+  };
+
+  const handleSent = () => {
+    setSchedulingFor(null);
+  };
+
   return (
-    <div className="cand-page">
-      {/* Filters rail — stubbed for now */}
-      <aside className="filters">
-        <h3>Filters</h3>
-        <p style={{ fontSize: "13px", color: "var(--text-soft)" }}>
-          Role, skill, seniority, location, status, date-range facets land in
-          Sprint B6.
+    <div className="p-6 max-w-6xl mx-auto">
+      <header className="mb-6">
+        <h1 className="text-2xl font-semibold text-gray-900">Candidate Search</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Semantic search over CVs ingested via the inbound email pipeline.
         </p>
-      </aside>
+      </header>
 
-      <div className="cand-main">
-        <header className="cand-header">
-          <h1 className="chat-title">Candidate Search</h1>
-          <p className="chat-subtitle">
-            Semantic search over CVs ingested via the inbound email pipeline.
-            Sortable table with download links, missing-field flags, duplicate
-            detection, and one-click meeting scheduling via cal.com.
-          </p>
-        </header>
-
-        <div className="cand-toolbar">
-          <div className="search-input">
-            <svg className="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.35-4.35" />
-            </svg>
-            <input type="text" placeholder="Semantic search (Sprint B6)…" disabled />
-          </div>
-          <span className="cand-meta">0 candidates</span>
-        </div>
-
-        <div className="cand-table-wrap" style={{ padding: "40px 32px" }}>
-          <div
-            style={{
-              maxWidth: "480px",
-              color: "var(--text-soft)",
-              fontSize: "14px",
-              lineHeight: "1.6",
-            }}
-          >
-            <h3 style={{ fontSize: "15px", color: "var(--ink)", margin: "0 0 8px", fontWeight: 600 }}>
-              Sprint B6-B8 in progress
-            </h3>
-            <p>
-              Inbound CV pipeline (Edge Function plus Modal worker), then the
-              Candidate table, then the Schedule Meeting flow (cal.com slot grid
-              plus Resend invite) land here. Migration 004 is already applied;
-              the queue table is waiting for its first row.
-            </p>
-          </div>
-        </div>
+      {/* Search bar */}
+      <div className="flex gap-3 mb-6">
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={onKeyDown}
+          placeholder="Search by skill, role, or keyword..."
+          className="flex-1 border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          disabled={pending}
+        />
+        <button
+          type="button"
+          onClick={() => void doSearch()}
+          disabled={pending || !query.trim()}
+          className="px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {pending ? "Searching..." : "Search"}
+        </button>
       </div>
+
+      {/* Error state */}
+      {error && (
+        <p className="text-red-600 text-sm mb-4">{error}</p>
+      )}
+
+      {/* Pending */}
+      {pending && !results && (
+        <div className="text-gray-400 text-sm py-8 text-center">Searching…</div>
+      )}
+
+      {/* Empty state — never searched */}
+      {!pending && results === null && (
+        <div className="text-gray-400 text-sm py-8 text-center">
+          Type a query above and press Enter to search.
+        </div>
+      )}
+
+      {/* Results */}
+      {results !== null && !pending && results.length === 0 && !error && (
+        <div className="text-gray-400 text-sm py-8 text-center">
+          No candidates found. Try a different query.
+        </div>
+      )}
+
+      {results !== null && results.length > 0 && (
+        <CandidateTable rows={results} onSchedule={(card) => setSchedulingFor(card)} />
+      )}
+
+      {/* Schedule Meeting Modal */}
+      {schedulingFor && (
+        <ScheduleMeetingModal
+          candidate={schedulingFor}
+          onClose={() => setSchedulingFor(null)}
+          onSent={handleSent}
+        />
+      )}
     </div>
   );
 }
