@@ -101,12 +101,12 @@ function CandidateRow({
       <td className="py-3 pr-4">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-gray-700 w-10">
-            {row.match_score.toFixed(2)}
+            {Number(row.match_score).toFixed(2)}
           </span>
           <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
             <div
               className="h-full bg-blue-500 rounded-full"
-              style={{ width: `${Math.min(row.match_score * 100, 100)}%` }}
+              style={{ width: `${Math.min(Number(row.match_score) * 100, 100)}%` }}
             />
           </div>
         </div>
