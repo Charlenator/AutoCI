@@ -303,6 +303,7 @@ async def schedule_candidate(candidate_id: str, body: ScheduleRequest, request: 
             to=email,
             subject="Interview slots available",
             html=html_body,
+            from_email="AutoCI <recruitment@wabi-ai.tech>",
         )
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Resend email failed: {exc}") from exc
