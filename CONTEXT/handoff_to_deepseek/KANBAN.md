@@ -23,7 +23,7 @@
 | 01.4 | Section-based smart-chunking helper (`cv_chunking.py`) | 2026-05-04 | Built; 8 unit tests passing |
 | 01.5 | Email vectorizer helper (`email_vectorizer.py`) | 2026-05-04 | Built; 7 unit tests passing |
 | 01.6 | Wire B5 pipeline into `inbound_processor.py` | 2026-05-04 | B4 stub replaced; 85 tests pass |
-| 01.7 | End-to-end smoke via `/inbound/simulate` | 2026-05-04 | 19/20 pass; 1 failure: `corpus_chunks` upsert used `json.dumps(meta)` instead of raw dict for JSONB column. Fixed in `da15de1`. Re-deploy Modal to verify. |
+| 01.7 | End-to-end smoke via `/inbound/simulate` | 2026-05-04 | 25/25 pass after fix + Modal re-deploy. Full pipeline: S5 → S6 → S7 → chunk → embed → upsert + dedup verified. |
 
 ## In progress
 
