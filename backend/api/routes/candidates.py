@@ -9,6 +9,7 @@ Three endpoints on a single APIRouter:
 from __future__ import annotations
 
 import html as html_mod
+import json as json_mod
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Request
@@ -87,8 +88,15 @@ async def search_candidates(body: SearchRequest, request: Request):
     # Group chunks by candidate_id; keep the highest-similarity chunk per ID.
     best: dict[str, tuple[float, dict]] = {}  # candidate_id -> (similarity, chunk)
     for c in chunks:
-        meta = c.get("metadata") or {}
-        cid = meta.get("candidate_id")
+        raw_meta = c.get("metadata") or {}
+        if isinstance(raw_meta, str):
+            try:
+                meta = json_mod.loads(raw_meta)
+            except (json_mod.JSONDecodeError, TypeError):
+                meta = {}
+        else:
+            meta = raw_meta
+        cid = meta.get("candidate_id") if isinstance(meta, dict) else None
         if not cid:
             continue
         sim = c.get("similarity") or 0.0
@@ -126,9 +134,8 @@ async def search_candidates(body: SearchRequest, request: Request):
         if isinstance(skills_raw, list):
             top_skills = skills_raw[:5]
         elif isinstance(skills_raw, str):
-            import json as _json
             try:
-                parsed = _json.loads(skills_raw)
+                parsed = json_mod.loads(skills_raw)
                 top_skills = (parsed if isinstance(parsed, list) else [])[:5]
             except Exception:
                 top_skills = []
@@ -141,9 +148,8 @@ async def search_candidates(body: SearchRequest, request: Request):
 
         missing = row.get("missing_fields_json") or []
         if isinstance(missing, str):
-            import json as _json
             try:
-                missing = _json.loads(missing)
+                missing = json_mod.loads(missing)
             except Exception:
                 missing = []
         if not isinstance(missing, list):
