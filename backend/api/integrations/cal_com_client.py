@@ -26,6 +26,7 @@ Each entry has a ``start`` key (not ``time``).
 
 import os
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlencode
 
 import httpx
 
@@ -171,10 +172,15 @@ class CalComClient:
                 if slot_start is None:
                     continue
                 slot_end = slot_start + timedelta(minutes=event_length)
+                # Cal.com's booking-page JS expects a UTC Z-suffix slot value
+                # and the date must be the UTC date (edge-safe near midnight).
+                slot_utc = slot_start.astimezone(timezone.utc)
+                slot_str = slot_utc.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+                date_utc = slot_utc.strftime("%Y-%m-%d")
 
                 booking_url = (
                     f"https://cal.com/{self.username}/{self.event_slug}"
-                    f"?date={date_str}&slot={slot_start.isoformat()}"
+                    f"?{urlencode({'date': date_utc, 'slot': slot_str})}"
                 )
 
                 parsed_slots.append({
