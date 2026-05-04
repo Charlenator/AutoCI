@@ -327,7 +327,7 @@ def _embed_and_upsert_chunks(
         supabase.table("corpus_chunks").upsert({
             "corpus_name": chunk["corpus_name"],
             "chunk_text": chunk["chunk_text"],
-            "metadata": json.dumps(meta),
+            "metadata": meta,               # pass dict, NOT json.dumps(...) — JSONB column needs it
             "embedding": emb,
             "confidential": meta.get("confidential", True),
         }, on_conflict="content_hash", ignore_duplicates=True).execute()
