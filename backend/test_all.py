@@ -27,7 +27,7 @@ Use --filter to run only tests whose name contains the given string. Example:
 import sys
 import json
 import os
-from datetime import date
+from datetime import date, datetime, timezone
 
 # ── CLI args ──────────────────────────────────────────────────────────────
 
@@ -914,7 +914,7 @@ def level5_e2e_kaizen():
             "phase": "detection",
             "status": "running",
             "output_state": {},
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }).execute()
     except Exception as e:
         test(f"Create session row: {e}", lambda: False)

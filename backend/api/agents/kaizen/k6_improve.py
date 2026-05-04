@@ -102,7 +102,7 @@ class K6ImproveAgent:
 
         # Format root causes for the prompt
         root_cause_list = linked_root_causes or []
-        root_causes_text = "\n".join(f"  - {rc}" for rc in root_cause_text) if root_cause_list else root_causes
+        root_causes_text = "\n".join(f"  - {rc}" for rc in root_cause_list) if root_cause_list else root_causes
 
         system = SYSTEM_PROMPT + (("\n\n" + rag_block) if rag_block else "")
         user = (
@@ -120,7 +120,7 @@ class K6ImproveAgent:
             temperature=0.3,
         )
 
-        interventions = self._parse_interventions(content)
+        interventions = self._parse_interventions(content, linked_root_causes=linked_root_causes)
         if not interventions:
             interventions = self._fallback_intervention()
 
@@ -173,7 +173,7 @@ class K6ImproveAgent:
         return "\n".join(lines), citations
 
     @staticmethod
-    def _parse_interventions(content: str) -> list[Intervention]:
+    def _parse_interventions(content: str, linked_root_causes: list[str] | None = None) -> list[Intervention]:
         """Parse the JSON output. Tolerates markdown fences and stray prose."""
         text = content.strip()
         if text.startswith("```"):

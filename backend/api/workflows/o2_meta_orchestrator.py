@@ -19,7 +19,7 @@ from api.agents.specialists.s1_query_planner import QueryPlannerAgent
 from api.agents.specialists.s2_rag import RAGAgent
 from api.agents.specialists.s3_sql_executor import SQLExecutor
 from api.agents.specialists.s4_research import ResearchAgent
-from api.agents.cis.fmea import FMEAAgent
+from api.agents.cis.fmea import FMEAAgent, FMEAOutput
 from api.sse import (
     push_event, make_node_event, make_phase_event, make_output_event,
     make_step_event, make_cost_event, make_phase_writeup_event,
@@ -68,6 +68,7 @@ class MetaOrchestrator:
         self.k3 = K3AnalyseHostAgent(llm_router, rag_agent=self.s2)
         self.k6 = K6ImproveAgent(llm_router, rag_agent=self.s2)
         self.k7 = K7ControlAgent(llm_router)
+        self.fmea = FMEAAgent(llm_router)
 
     def _sse(self, session_id: str, event: dict):
         try:
@@ -728,12 +729,16 @@ class MetaOrchestrator:
                 self._out(session_id, "detection", "D1", f"**Time to Fill**: {internal.time_to_fill_days} days")
             elif tool == "D2":
                 self._sse(session_id, make_node_event("D2", "active", "External Benchmarking"))
-                external = self.d2.run_multi_kpi(role_title, getattr(internal, "kpis", {}))
+                internal_data = detection_result.get("internal", {})
+                kpis = internal_data.get("kpis", {}) if isinstance(internal_data, dict) else getattr(internal_data, "kpis", {}) if hasattr(internal_data, "kpis") else {}
+                external = self.d2.run_multi_kpi(role_title, kpis)
                 self._sse(session_id, make_node_event("D2", "complete"))
                 detection_result["external"] = external
             elif tool == "D3":
                 self._sse(session_id, make_node_event("D3", "active", "Gap Analysis"))
-                gap = self.d3.analyze(getattr(internal, "__dict__", {}), detection_result.get("external", {}), session_id=session_id)
+                internal_data = detection_result.get("internal", {})
+                internal_dict = internal_data if isinstance(internal_data, dict) else getattr(internal_data, "__dict__", {})
+                gap = self.d3.analyze(internal_dict, detection_result.get("external", {}), session_id=session_id)
                 self._sse(session_id, make_node_event("D3", "complete"))
                 detection_result["gap"] = gap.__dict__
             elif tool == "K1":

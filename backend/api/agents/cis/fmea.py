@@ -79,7 +79,7 @@ class FMEAAgent:
     def __init__(self, llm_router: LiteLLMRouter):
         self.llm = llm_router
 
-    def run(self, problem: str, role_title: str = "") -> FMEAOutput:
+    def run(self, problem: str, role_title: str = "", session_id: str | None = None) -> FMEAOutput:
         import json
 
         user_prompt = f"Problem: {problem}\n"
