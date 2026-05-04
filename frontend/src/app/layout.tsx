@@ -4,6 +4,7 @@ import "./globals.css";
 import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
 import RightDrawer from "../components/RightDrawer";
+import { Analytics } from "@vercel/analytics/next";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -42,6 +43,7 @@ export default function RootLayout({
             </div>
           </div>
         </div>
+        <Analytics />
       </body>
     </html>
   );
