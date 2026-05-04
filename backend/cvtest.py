@@ -172,11 +172,12 @@ try:
             check("source_email_id matches", str(c.get("source_email_id")) == inbound_id,
                   f"got {c.get('source_email_id')} expected {inbound_id}")
 
-        # corpus_chunks rows
+        # corpus_chunks rows — use metadata->> operator for broadest match
+        # (handles both raw dict and double-string-encoded JSONB)
         chunks_resp = (
             supa.table("corpus_chunks")
             .select("*")
-            .contains("metadata", json.dumps({"candidate_id": candidate_id}))
+            .filter("metadata->>candidate_id", "eq", candidate_id)
             .execute()
         )
         chunk_rows = chunks_resp.data or []
