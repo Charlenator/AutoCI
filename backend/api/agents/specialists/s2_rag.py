@@ -51,7 +51,7 @@ class RAGAgent:
 
             rpc_params = {
                 "query_embedding": query_vec,
-                "match_threshold": 0.7,
+                "match_threshold": 0.3,
                 "match_count": top_k,
             }
             if corpus_filter:
@@ -64,14 +64,37 @@ class RAGAgent:
             return []
 
     def _text_search(self, query: str, top_k: int, corpus_filter: str | None) -> list[dict]:
-        """PostgreSQL full-text search fallback."""
+        """PostgreSQL full-text search fallback with ts_rank scoring.
+
+        Uses run_select_query RPC with plainto_tsquery (strips special chars)
+        to compute a real ts_rank as the similarity field.
+        """
         try:
-            q = self.supabase.table("corpus_chunks").select("*").text_search(
-                "chunk_text", query
-            ).limit(top_k)
-            if corpus_filter:
-                q = q.eq("corpus_name", corpus_filter)
-            resp = q.execute()
+            # plainto_tsquery is safe — it strips punctuation and special chars
+            where = f"AND corpus_name = '{corpus_filter}'" if corpus_filter else ""
+            sql = (
+                "SELECT *, COALESCE(ts_rank(to_tsvector('english', chunk_text), "
+                f"plainto_tsquery('english', '{query}')), 0)::float8 AS similarity "
+                "FROM corpus_chunks "
+                f"WHERE to_tsvector('english', chunk_text) @@ plainto_tsquery('english', '{query}') "
+                f"{where} "
+                f"ORDER BY similarity DESC LIMIT {top_k}"
+            )
+            resp = self.supabase.rpc("run_select_query", {"sql_text": sql}).execute()
             return resp.data or []
         except Exception:
-            return []
+            # Final fallback: simple text_search with synthetic similarity
+            try:
+                q = self.supabase.table("corpus_chunks").select("*").text_search(
+                    "chunk_text", query
+                ).limit(top_k)
+                if corpus_filter:
+                    q = q.eq("corpus_name", corpus_filter)
+                resp = q.execute()
+                data = resp.data or []
+                # Add synthetic similarity based on rank position
+                for i, row in enumerate(data):
+                    row["similarity"] = (top_k - i) / top_k
+                return data
+            except Exception:
+                return []

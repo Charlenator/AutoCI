@@ -102,17 +102,33 @@ export default function ScheduleMeetingModal({
   }, []);
 
   const handleSend = useCallback(async () => {
-    if (!candidate || selected.size === 0 || slotsState.status !== "loaded") return;
+    if (!candidate) {
+      setSendError("No candidate selected");
+      return;
+    }
+    if (selected.size === 0) {
+      setSendError("Please select at least one time slot");
+      return;
+    }
     setSending(true);
     setSendError(null);
     try {
+      // Resolve slots from current state snapshot to avoid stale-ref issues
+      const slotsSnap = slotsState.status === "loaded" ? slotsState.slots : [];
+      if (slotsSnap.length === 0) {
+        throw new Error("No available slots loaded — refresh and try again");
+      }
       const chosenSlots = Array.from(selected)
         .sort((a, b) => a - b)
+        .filter((i) => i < slotsSnap.length)
         .map((i) => ({
-          start: slotsState.slots[i].start,
-          end: slotsState.slots[i].end,
-          booking_url: slotsState.slots[i].booking_url,
+          start: slotsSnap[i].start,
+          end: slotsSnap[i].end,
+          booking_url: slotsSnap[i].booking_url,
         }));
+      if (chosenSlots.length === 0) {
+        throw new Error("Selected slots are out of range — refresh and try again");
+      }
       const res = await fetch(`${API_BASE}/candidates/${candidate.id}/schedule`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
