@@ -24,25 +24,12 @@
 | 01.5 | Email vectorizer helper (`email_vectorizer.py`) | 2026-05-04 | Built; 7 unit tests passing |
 | 01.6 | Wire B5 pipeline into `inbound_processor.py` | 2026-05-04 | B4 stub replaced; 85 tests pass |
 | 01.7 | End-to-end smoke via `/inbound/simulate` | 2026-05-04 | 25/25 pass after fix + Modal re-deploy. Full pipeline: S5 → S6 → S7 → chunk → embed → upsert + dedup verified. |
-
-## In progress
-
-| ID | Sub-task | Started | Notes |
-|---|---|---|---|
+| 01.8 | Fix Edge Function: fetch .docx bytes via Resend Attachments API | 2026-05-04 | Real Resend webhooks omit attachment bytes; Edge Function v4 now calls GET /attachments and downloads from signed URL. Verified production: Pieter van der Merwe CV processed end-to-end. |
+| — | Bug fix: Level 5 e2e test FK + UUID errors | 2026-05-04 | `session_id="e2e-test-001"` not valid UUID → `str(uuid.uuid4())`. Also needed `kaizen_sessions` row insert before `run_full_kaizen` call (FK ref). Live deploy OK. |
+| 02.1 | `resend_client.py` — thin async-friendly wrapper around the Resend send API | 2026-05-04 | Code exists (written in prior session); uncommitted. Needs stage+commit. |
+| 03.1 | `cal_com_client.py` — 14-day slot grid via cal.com v2 API | 2026-05-04 | Rewritten for v2 (header auth, date-only start/end, `data` IS slots dict). 17/17 unit tests passing. Live smoke: 63 slots across 4 days for eventTypeId=5572588. `.env` has `CAL_COM_DEFAULT_EVENT_TYPE_ID` added. |
 
 ## Backlog
-
-### Task 02 — B6 Resend send wrapper
-
-| ID | Sub-task | File ref |
-|---|---|---|
-| 02.1 | `resend_client.py` — thin async-friendly wrapper around the Resend send API | 02_b6_resend_send.md §1 |
-
-### Task 03 — B7 cal.com slot lookup
-
-| ID | Sub-task | File ref |
-|---|---|---|
-| 03.1 | `cal_com_client.py` — 14-day slot grid via free-tier API | 03_b7_cal_com.md §1 |
 
 ### Task 04 — B8 Candidate Search + Schedule Meeting
 

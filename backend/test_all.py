@@ -1,10 +1,63 @@
 #!/usr/bin/env python3
-"""AutoCI — Multi-level test suite. Run: python3 test_all.py [--level 1|2|3|4|5]"""
+"""AutoCI — Multi-level test suite. Run: python3 test_all.py [--level 1|2|3|4|5] [--filter "B7:"]
+
+Acronym legend for test names (alphabetical):
+  B-aug     Live-search augmentation (Tavily/News/Adzuna → corpus_chunks)
+  B-evidence Source-record evidence for aggregate SQL results
+  B6        Resend send API wrapper (resend_client.py)
+  B7        cal.com slot-lookup wrapper (cal_com_client.py)
+  01.4      CV section-based smart-chunking (cv_chunking.py)
+  01.5      Email vectorizer (email_vectorizer.py)
+  D1/D2/D3  Detection agents (internal benchmarks, external, gap analysis)
+  K1–K7     Kaizen phase agents (Define/Measure/Analyse/5 Whys/Ishikawa/Improve/Control)
+  O3        Phase-gate enforcer
+  S1        Query Planner Agent (LLM-based plan construction)
+  S3        SQL Executor (template + freeform with allowlist)
+  S5        CV classifier agent (is-this-a-CV)
+  S6        .docx field extractor agent
+  S7        Confidentiality classifier agent
+  T1        AnalyticsLibrary (MCP-aligned analytical tools)
+  T2        ValidationInterceptor (Pydantic schema validation wrapper)
+
+Use --filter to run only tests whose name contains the given string. Example:
+  python test_all.py --level 1 --filter "B7:"    # only B7 CalComClient tests
+  python test_all.py --filter "S6:"              # only S6 CV extractor tests (level 1+)
+"""
 
 import sys
 import json
 import os
 from datetime import date
+
+# ── CLI args ──────────────────────────────────────────────────────────────
+
+_FILTER: str | None = None
+_LEVEL: int = 0
+_TARGET: str = "local"  # "local" or "modal"
+
+argv = sys.argv[1:]
+i = 0
+while i < len(argv):
+    if argv[i] == "--filter" and i + 1 < len(argv):
+        _FILTER = argv[i + 1].lower()
+        i += 2
+    elif argv[i] == "--level" and i + 1 < len(argv):
+        _LEVEL = int(argv[i + 1])
+        i += 2
+    elif argv[i] == "--target" and i + 1 < len(argv):
+        _TARGET = argv[i + 1].lower()
+        if _TARGET not in ("local", "modal"):
+            print(f"Unknown target '{_TARGET}'. Use 'local' or 'modal'.")
+            sys.exit(1)
+        i += 2
+    else:
+        i += 1
+
+BACKEND_BASE = (
+    "https://charlenator--autoci-backend-fastapi-app.modal.run"
+    if _TARGET == "modal"
+    else "http://localhost:8000"
+)
 
 # ── Level 1: Unit Tests (0 dependencies) ──────────────────────────────────
 
@@ -13,9 +66,19 @@ pass_count = 0
 fail_count = 0
 
 def test(name, fn):
+    """Register a test. If --filter is active, skip unless name contains it.
+
+    The callable must return a truthy value or raise. Returning ``False``
+    or ``None`` is treated as a failure — this catches tests that forget
+    to assert (e.g. ``test("x", lambda: False)``).
+    """
     global pass_count, fail_count
+    if _FILTER and _FILTER not in name.lower():
+        return  # skip silently
     try:
-        fn()
+        result = fn()
+        if not result:
+            raise AssertionError(f"returned {result}")
         print(f"  {ANSI['GREEN']}✓{ANSI['RESET']} {name}")
         pass_count += 1
     except Exception as e:
@@ -364,6 +427,207 @@ def level1_unit():
         select_ok = False
     test("S3: clean SELECT passes allowlist", lambda: select_ok)
 
+    # B6 — ResendClient (simple inline assertions)
+    from api.integrations.resend_client import ResendClient, ResendError
+
+    class _FakeResponse:
+        def __init__(self, status_code, json_data):
+            self.status_code = status_code
+            self._json = json_data
+            self.text = json.dumps(json_data)
+        @property
+        def is_success(self):
+            return self.status_code < 400
+        def json(self):
+            return self._json
+
+    # Use an explicit call-counter to track which httpx.Client instance to inspect.
+    _b6_last_body = {"val": None}
+
+    class _FakeClient:
+        def __init__(self, timeout=None):
+            self.timeout = timeout
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            pass
+        def post(self, url, *, headers, json):
+            _b6_last_body["val"] = json
+            return _FakeResponse(200, {"id": "abc-123"})
+
+    class _FakeErrorClient:
+        def __init__(self, timeout=None):
+            self.timeout = timeout
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            pass
+        def post(self, url, *, headers, json):
+            return _FakeResponse(422, {"error": "missing from field"})
+
+    _b6_mod = __import__("api.integrations.resend_client", fromlist=["httpx"])
+    _b6_orig = _b6_mod.httpx.Client
+
+    try:
+        _b6_mod.httpx.Client = _FakeClient
+        _b6_c = ResendClient(api_key="test_re_key", default_from="me@example.com")
+
+        # T1: success
+        _b6_r = _b6_c.send_email(to="x@y.com", subject="hi", html="<p>hi</p>", from_email="me@example.com")
+        test("B6: send_email returns id on success", lambda: _b6_r == {"id": "abc-123"})
+
+        # T2: body shape
+        _b6_b = _b6_last_body["val"]
+        test("B6: send_email shapes request body correctly", lambda: (
+            _b6_b is not None
+            and _b6_b["from"] == "me@example.com"
+            and _b6_b["to"] == ["x@y.com"]
+            and _b6_b["subject"] == "hi"
+            and _b6_b["html"] == "<p>hi</p>"
+            and "reply_to" not in _b6_b
+            and "text" not in _b6_b
+        ))
+
+        # T3: send_email_text
+        _b6_last_body["val"] = None
+        _b6_c.send_email_text(to=["a@b.com", "c@d.com"], subject="plain", body="Hello\nWorld", from_email="me@example.com")
+        _b6_b2 = _b6_last_body["val"]
+        test("B6: send_email_text converts plain text to HTML", lambda: (
+            _b6_b2 is not None
+            and "Hello" in _b6_b2["html"]
+            and "<br>" in _b6_b2["html"]
+            and _b6_b2["text"] == "Hello\nWorld"
+            and _b6_b2["to"] == ["a@b.com", "c@d.com"]
+        ))
+
+        # T4: error handling
+        _b6_mod.httpx.Client = _FakeErrorClient
+        _b6_raised = None
+        try:
+            _b6_c.send_email(to="x@y.com", subject="x", html="<p>x</p>")
+        except ResendError as e:
+            _b6_raised = e
+        test("B6: error response raises ResendError with detail", lambda: (
+            _b6_raised is not None
+            and "422" in str(_b6_raised)
+            and "missing from field" in str(_b6_raised)
+        ))
+
+    finally:
+        _b6_mod.httpx.Client = _b6_orig
+
+    # B7 — CalComClient (simple inline assertions)
+    from api.integrations.cal_com_client import CalComClient, CalComError, _parse_iso
+
+    test("B7: _parse_iso handles Z suffix", lambda: _parse_iso("2026-05-04T09:00:00Z") is not None)
+    test("B7: _parse_iso handles +00:00", lambda: _parse_iso("2026-05-04T09:00:00+00:00") is not None)
+    test("B7: _parse_iso returns None for garbage", lambda: _parse_iso("not-a-date") is None)
+
+    class _FakeGetResponse:
+        def __init__(self, status_code, json_data):
+            self.status_code = status_code
+            self._json = json_data
+            self.text = json.dumps(json_data)
+        @property
+        def is_success(self):
+            return self.status_code < 400
+        def json(self):
+            return self._json
+
+    class _B7FakeClient:
+        def __init__(self, timeout=None):
+            self.timeout = timeout
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            pass
+        def get(self, url, *, params, headers=None):
+            _b7_last_params["val"] = params
+            _b7_last_url["val"] = url
+            _b7_last_headers["val"] = headers
+            return _FakeGetResponse(200, {
+                "status": "success",
+                "data": {
+                    "2026-05-04": [
+                        {"start": "2026-05-04T09:00:00+02:00"},
+                        {"start": "2026-05-04T09:30:00+02:00"},
+                    ]
+                }
+            })
+
+    class _B7FakeErrorClient:
+        def __init__(self, timeout=None):
+            self.timeout = timeout
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            pass
+        def get(self, url, *, params, headers=None):
+            return _FakeGetResponse(401, {"error": "Invalid API key"})
+
+    _b7_last_params = {"val": None}
+    _b7_last_url = {"val": None}
+    _b7_last_headers = {"val": None}
+
+    _b7_mod = __import__("api.integrations.cal_com_client", fromlist=["httpx"])
+    _b7_orig = _b7_mod.httpx.Client
+
+    try:
+        _b7_mod.httpx.Client = _B7FakeClient
+        _b7_c = CalComClient(api_key="test_cal_key", username="charle", default_event_type_id=123)
+
+        # T1: success — check parsed shape
+        _b7_slots = _b7_c.get_slots(event_type_id=123, days=7)
+        test("B7: get_slots returns dict keyed by date", lambda: isinstance(_b7_slots, dict))
+        test("B7: get_slots has 2026-05-04 key", lambda: "2026-05-04" in _b7_slots)
+        test("B7: get_slots returns 2 slots for that date", lambda: len(_b7_slots["2026-05-04"]) == 2)
+        test("B7: each slot has start/end/booking_url keys", lambda: all(
+            {"start", "end", "booking_url"} <= set(s) for s in _b7_slots["2026-05-04"]
+        ))
+        _b7_first = _b7_slots["2026-05-04"][0]
+        test("B7: slot start is ISO formatted", lambda: "2026-05-04T09:00:00" in _b7_first["start"])
+        test("B7: slot end is 30m after start", lambda: "09:30:00" in _b7_first["end"])
+        test("B7: booking_url contains username + slug", lambda: "charle" in _b7_first["booking_url"] and "30min" in _b7_first["booking_url"])
+        test("B7: booking_url contains date param", lambda: "date=2026-05-04" in _b7_first["booking_url"])
+        test("B7: booking_url contains slot param", lambda: "slot=" in _b7_first["booking_url"])
+
+        # T2: request params + headers check (v2 uses header-based auth)
+        _b7_p = _b7_last_params["val"]
+        _b7_h = _b7_last_headers["val"]
+        test("B7: request has eventTypeId=123 in params", lambda: _b7_p is not None and _b7_p.get("eventTypeId") == "123")
+        test("B7: request has cal-api-key in headers", lambda: _b7_h is not None and _b7_h.get("cal-api-key") == "test_cal_key")
+        test("B7: request URL is correct v2", lambda: _b7_last_url["val"] == "https://api.cal.com/v2/slots")
+
+        # T3: error handling
+        _b7_mod.httpx.Client = _B7FakeErrorClient
+        _b7_raised = None
+        try:
+            _b7_c.get_slots(event_type_id=123)
+        except CalComError as e:
+            _b7_raised = e
+        test("B7: 401 raises CalComError with detail", lambda: (
+            _b7_raised is not None
+            and "401" in str(_b7_raised)
+            and "Invalid API key" in str(_b7_raised)
+        ))
+
+        # T4: empty slots response
+        class _B7FakeEmptyClient:
+            def __init__(self, timeout=None):
+                self.timeout = timeout
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                pass
+            def get(self, url, *, params, headers=None):
+                return _FakeGetResponse(200, {})
+        _b7_mod.httpx.Client = _B7FakeEmptyClient
+        _b7_empty = _b7_c.get_slots(event_type_id=123)
+        test("B7: empty response returns empty dict", lambda: _b7_empty == {})
+
+    finally:
+        _b7_mod.httpx.Client = _b7_orig
+
     # O3 — PhaseGateEnforcer
     from api.workflows.o3_phase_gate import PhaseGateEnforcer
     g = PhaseGateEnforcer()
@@ -405,14 +669,14 @@ def level3_litellm():
 # ── Level 4: FastAPI Server ────────────────────────────────────────────────
 
 def level4_fastapi():
-    print(f"\n{'='*60}\n📦 LEVEL 4: FastAPI HTTP\n{'='*60}")
+    print(f"\n{'='*60}\n📦 LEVEL 4: FastAPI HTTP (target: {_TARGET})\n{'='*60}")
     import httpx
     try:
-        r = httpx.get("http://localhost:8000/health", timeout=5)
+        r = httpx.get(f"{BACKEND_BASE}/health", timeout=5)
         test("GET /health", lambda: r.status_code == 200 and r.json()["status"] == "ok")
-        r2 = httpx.post("http://localhost:8000/trigger/manual", json={}, timeout=5)
+        r2 = httpx.post(f"{BACKEND_BASE}/trigger/manual", json={}, timeout=5)
         test("POST /trigger/manual", lambda: r2.status_code == 200 and r2.json().get("session_id"))
-        r3 = httpx.post("http://localhost:8000/trigger/goal-review", timeout=5)
+        r3 = httpx.post(f"{BACKEND_BASE}/trigger/goal-review", timeout=5)
         test("POST /trigger/goal-review", lambda: r3.status_code == 200)
     except Exception as e:
         test(f"Server not running: {e}", lambda: False)
@@ -424,13 +688,38 @@ def level5_e2e_kaizen():
     if not os.environ.get("SUPABASE_SERVICE_KEY", "") or not os.environ.get("DEEPSEEK_API_KEY", ""):
         print(f"  {ANSI['YELLOW']}⚠ SKIP: Needs SUPABASE_SERVICE_KEY + DEEPSEEK_API_KEY{ANSI['RESET']}")
         return
+    import uuid
+    from datetime import datetime
     from supabase import create_client
     from api.tools.t3_litellm_router import LiteLLMRouter
     from api.workflows.o2_meta_orchestrator import MetaOrchestrator
     supa = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
     llm = LiteLLMRouter(supabase_client=supa)
     orch = MetaOrchestrator(supa, llm)
-    result = orch.run_full_kaizen(session_id="e2e-test-001", role_title="Senior Java Developer")
+    sid = str(uuid.uuid4())
+    # Insert kaizen_sessions row first — FK requirement for agent_invocations
+    try:
+        supa.table("kaizen_sessions").insert({
+            "session_id": sid,
+            "trigger_type": "manual",
+            "phase": "detection",
+            "status": "running",
+            "output_state": {},
+            "created_at": datetime.utcnow().isoformat(),
+        }).execute()
+    except Exception as e:
+        test(f"Create session row: {e}", lambda: False)
+        return
+    result = orch.run_full_kaizen(session_id=sid, role_title="Senior Java Developer")
+    # Update session status on completion
+    try:
+        final_status = "completed" if result.phase in ("complete", "detection") else "failed"
+        supa.table("kaizen_sessions").update({
+            "status": final_status,
+            "phase": result.phase,
+        }).eq("session_id", sid).execute()
+    except Exception:
+        pass
     test("E2E completed", lambda: result.phase is not None and result.phase != "error")
     test("D1: internal metrics computed", lambda: result.detection is not None and "time_to_fill_days" in str(result.detection))
     if result.define:
@@ -471,14 +760,13 @@ def load_env():
 
 if __name__ == "__main__":
     load_env()
-    level = int(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[1] == "--level" else 0
 
-    if level in (0, 1): level1_unit()
-    if level in (0, 2): level2_supabase()
-    if level in (0, 3): level3_litellm()
-    if level in (0, 4): level4_fastapi()
-    if level in (0, 5): level5_e2e_kaizen()
-    if level in (0, 6): test_mcp_server()
+    if _LEVEL in (0, 1): level1_unit()
+    if _LEVEL in (0, 2): level2_supabase()
+    if _LEVEL in (0, 3): level3_litellm()
+    if _LEVEL in (0, 4): level4_fastapi()
+    if _LEVEL in (0, 5): level5_e2e_kaizen()
+    if _LEVEL in (0, 6): test_mcp_server()
 
     print(f"\n{'='*60}")
     print(f"RESULTS: {ANSI['GREEN']}{pass_count} passed{ANSI['RESET']}, {ANSI['RED']}{fail_count} failed{ANSI['RESET']}")
