@@ -99,7 +99,7 @@ async def search_candidates(body: SearchRequest, request: Request):
         cid = meta.get("candidate_id") if isinstance(meta, dict) else None
         if not cid:
             continue
-        sim = c.get("similarity") or 0.0
+        sim = float(c.get("similarity") or 0)
         if cid not in best or sim > best[cid][0]:
             best[cid] = (sim, c)
 
@@ -107,7 +107,7 @@ async def search_candidates(body: SearchRequest, request: Request):
         return SearchResponse(results=[])
 
     # Sort by similarity descending to get the top N candidate_ids.
-    sorted_ids = [cid for cid, _ in sorted(best.items(), key=lambda x: x[1][0], reverse=True)]
+    sorted_ids = [cid for cid, _ in sorted(best.items(), key=lambda x: float(x[1][0]), reverse=True)]
 
     # Fetch full candidate rows from the database.
     try:
